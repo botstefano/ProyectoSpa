@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient'
+import { notificarLeadCalificado, notificarPropuestaAceptada } from '../../../lib/notificaciones'
 
 export async function obtenerLeads() {
   if (!supabase) return []
@@ -14,7 +15,10 @@ export async function obtenerLeads() {
       estado_contacto!inner(nombre_estado),
       lead_detalle (
         lead_score,
-        fecha_calificacion
+        fecha_calificacion,
+        propuesta_aceptada,
+        fecha_aceptacion,
+        datos_propuesta
       ),
       descarga (
         interes
@@ -31,8 +35,29 @@ export async function obtenerLeads() {
   return data
 }
 
+/**
+ * Transición: BUYER → LEAD
+ * Cambia el estado del contacto de 'buyer' a 'lead'
+ */
+async function transicionarBuyerALead(idContacto) {
+  const { data: estado, error: stateError } = await supabase
+    .from('estado_contacto')
+    .select('id_estado')
+    .eq('nombre_estado', 'lead')
+    .single()
+
+  if (stateError) throw stateError
+
+  const { error } = await supabase
+    .from('contacto')
+    .update({ id_estado: estado.id_estado })
+    .eq('id_contacto', idContacto)
+
+  if (error) throw error
+}
+
 export async function calificarLead(idContacto, score) {
-  if (!supabase) throw new Error('Supabase no est  configurado.')
+  if (!supabase) throw new Error('Supabase no está configurado.')
 
   const { error } = await supabase
     .from('lead_detalle')
@@ -46,4 +71,45 @@ export async function calificarLead(idContacto, score) {
     console.error('[leadsApi] Error al calificar lead:', error.message)
     throw error
   }
+
+  // Si el score es suficiente (>= 50), transicionar automáticamente a LEAD
+  if (score >= 50) {
+    try {
+      await transicionarBuyerALead(idContacto)
+      console.log('[leadsApi] Contacto transicionado de BUYER a LEAD')
+      // Enviar notificación
+      await notificarLeadCalificado(idContacto, score)
+    } catch (error) {
+      console.error('[leadsApi] Error en transición BUYER → LEAD:', error.message)
+      // No bloqueamos el flujo si falla la transición
+    }
+  }
+}
+
+/**
+ * Acepta propuesta y prepara para transición a PAYER
+ * Esto se llama cuando el lead acepta la propuesta en Fase 2
+ */
+export async function aceptarPropuesta(idContacto, datosPropuesta) {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+
+  // Guardar la propuesta aceptada en lead_detalle
+  const { error } = await supabase
+    .from('lead_detalle')
+    .update({
+      propuesta_aceptada: true,
+      fecha_aceptacion: new Date().toISOString(),
+      datos_propuesta: datosPropuesta
+    })
+    .eq('id_contacto', idContacto)
+
+  if (error) {
+    console.error('[leadsApi] Error al aceptar propuesta:', error.message)
+    throw error
+  }
+
+  // Enviar notificación a PAYERS
+  await notificarPropuestaAceptada(idContacto, datosPropuesta)
+
+  return { success: true, message: 'Propuesta aceptada, listo para pasar a PAYERS' }
 }

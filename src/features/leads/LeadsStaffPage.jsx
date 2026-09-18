@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { obtenerLeads, calificarLead } from "./api/leadsApi";
+import { obtenerLeads, calificarLead, aceptarPropuesta } from "./api/leadsApi";
 
 const TABS = ["Perfil","Propuesta","Historial","Notas","Actividades"];
 
@@ -117,12 +117,29 @@ export default function LeadsStaffPage() {
   const handleUpdateScore = async (id, newScore) => {
     try {
       await calificarLead(id, newScore);
-      setLeads(prev => prev.map(l => 
+      setLeads(prev => prev.map(l =>
         l.id === id ? { ...l, score: newScore, temp: calcularTemperatura(newScore) } : l
       ));
       show("Lead Score actualizado con éxito");
+      if (newScore >= 50) {
+        show("Lead calificado y transicionado a estado LEAD");
+      }
     } catch (err) {
       show("Error al actualizar Score");
+    }
+  };
+
+  const handleAcceptProposal = async (id) => {
+    try {
+      const propuesta = {
+        nombre: lead.propuesta.nombre,
+        precio: lead.propuesta.precioEspecial,
+        servicio: lead.interes
+      };
+      await aceptarPropuesta(id, propuesta);
+      show("Propuesta aceptada. Lead listo para pasar a PAYERS");
+    } catch (err) {
+      show("Error al aceptar propuesta");
     }
   };
 
@@ -389,8 +406,8 @@ export default function LeadsStaffPage() {
                   </div>
 
                   <div className="ln-cta-row">
-                    <button className="ln-btn-primary" onClick={() => show("Cita agendada exitosamente!")}>
-                      <IcoCal/> Agendar esta experiencia
+                    <button className="ln-btn-primary" onClick={() => handleAcceptProposal(lead.id)}>
+                      <IcoCheck/> Aceptar propuesta → Pasar a PAYERS
                     </button>
                     <button className="ln-btn-wa" onClick={() => show("Propuesta enviada por WhatsApp")}>
                       <IcoWA/> Enviar por WhatsApp

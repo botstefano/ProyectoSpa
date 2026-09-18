@@ -65,14 +65,52 @@ for each row execute function trg_validar_datos_contacto();
 create table lead_detalle (        -- propiedad de Fase 2
   id_contacto        int primary key references contacto(id_contacto) on delete restrict,
   lead_score         int check (lead_score between 0 and 100),
-  fecha_calificacion date
+  fecha_calificacion date,
+  propuesta_aceptada boolean default false,
+  fecha_aceptacion   timestamptz,
+  datos_propuesta    jsonb
+);
+
+create table propuesta_detalle (  -- propiedad de Fase 2
+  id_propuesta    bigserial primary key,
+  id_contacto     int not null references contacto(id_contacto) on delete restrict,
+  nombre_propuesta varchar(100),
+  descripcion     text,
+  precio_regular  numeric(10,2),
+  precio_especial numeric(10,2),
+  descuento       numeric(5,2),
+  duracion        varchar(50),
+  incluye         text,
+  fecha_generada  timestamptz not null default now(),
+  fecha_aceptada  timestamptz,
+  estado          varchar(20) default 'pendiente' check (estado in ('pendiente','aceptada','rechazada','expirada'))
 );
 
 create table pago_detalle (        -- propiedad de Fase 3
-  id_contacto  int primary key references contacto(id_contacto) on delete restrict,
-  estado_pago  varchar(30),
-  fecha_pago   date
+  id_contacto       int primary key references contacto(id_contacto) on delete restrict,
+  estado_pago       varchar(30),
+  fecha_pago        date,
+  servicio_contratado varchar(100),
+  monto_total       numeric(10,2),
+  metodo_pago       varchar(30)
 );
+
+-- Sistema de notificaciones entre fases
+create table notificacion_fase (
+  id_notificacion   bigserial primary key,
+  id_contacto       int not null references contacto(id_contacto) on delete restrict,
+  fase_origen       varchar(20) not null check (fase_origen in ('buyers','leads','payers','customers')),
+  fase_destino      varchar(20) not null check (fase_destino in ('buyers','leads','payers','customers')),
+  tipo_evento       varchar(50) not null,
+  mensaje          text not null,
+  data_adicional    jsonb,
+  leida            boolean default false,
+  fecha_creacion    timestamptz not null default now(),
+  fecha_lectura     timestamptz
+);
+
+create index idx_notificacion_contacto on notificacion_fase(id_contacto);
+create index idx_notificacion_leida on notificacion_fase(leida, fecha_creacion desc);
 
 create table atencion_detalle (    -- propiedad de Fase 4
   id_atencion              bigserial primary key,
@@ -207,14 +245,18 @@ create table mensajeenviado (
 -- 3. SEGURIDAD (RLS) — el formulario público solo puede ESCRIBIR
 --    lo mínimo necesario, nunca leer datos de otros contactos.
 -- ---------------------------------------------------------------------
-alter table contacto        enable row level security;
-alter table visitalanding   enable row level security;
-alter table descarga        enable row level security;
-alter table contacto_campana enable row level security;
-alter table mensajeenviado  enable row level security;
-alter table fuente_captacion enable row level security;
-alter table leadmagnet      enable row level security;
-alter table estado_contacto enable row level security;
+alter table contacto          enable row level security;
+alter table visitalanding     enable row level security;
+alter table descarga          enable row level security;
+alter table contacto_campana  enable row level security;
+alter table mensajeenviado    enable row level security;
+alter table fuente_captacion  enable row level security;
+alter table leadmagnet        enable row level security;
+alter table estado_contacto  enable row level security;
+alter table lead_detalle      enable row level security;
+alter table propuesta_detalle enable row level security;
+alter table pago_detalle      enable row level security;
+alter table notificacion_fase enable row level security;
 
 -- Catálogos: lectura pública (el formulario necesita resolver ids por nombre)
 create policy "catalogo_lectura_publica_estado"  on estado_contacto  for select to anon using (true);
@@ -226,6 +268,16 @@ create policy "catalogo_lectura_publica_magnet"  on leadmagnet       for select 
 create policy "landing_all_operations_contacto" on contacto for all to anon using (true) with check (true);
 create policy "landing_all_operations_visita"   on visitalanding for all to anon using (true) with check (true);
 create policy "landing_all_operations_descarga" on descarga for all to anon using (true) with check (true);
+
+-- Fase 2 (LEADS): políticas para tablas de leads (uso interno staff)
+create policy "leads_all_operations_lead_detalle" on lead_detalle for all to anon using (true) with check (true);
+create policy "leads_all_operations_propuesta_detalle" on propuesta_detalle for all to anon using (true) with check (true);
+
+-- Fase 3 (PAYERS): políticas para tabla de pagos (uso interno staff)
+create policy "payers_all_operations_pago_detalle" on pago_detalle for all to anon using (true) with check (true);
+
+-- Sistema de notificaciones (uso interno staff)
+create policy "notificaciones_all_operations" on notificacion_fase for all to anon using (true) with check (true);
 
 -- Nota para Fases 2-4: sus paneles son de USO INTERNO (staff), no público.
 -- Cuando implementen sus pantallas, usen Supabase Auth y políticas para el
