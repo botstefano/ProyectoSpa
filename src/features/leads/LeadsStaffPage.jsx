@@ -300,7 +300,23 @@ export default function LeadsStaffPage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: 'rgba(200,155,92,0.1)', padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid rgba(200,155,92,0.3)' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--color-ink-muted)' }}>Lead Score:</span>
-                  <strong style={{ fontSize: '1.3rem', color: 'var(--color-ink)' }}>{lead.score} <span style={{fontSize:'0.9rem', color:'gray'}}>/ 100</span></strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <button 
+                      onClick={() => handleUpdateScore(lead.id, Math.max(0, lead.score - 5))} 
+                      style={{ background: 'transparent', border: '1px solid rgba(243,238,226,0.3)', color: 'var(--color-ink)', borderRadius: '4px', width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', lineHeight: '1' }}
+                      title="Restar 5 puntos"
+                    >
+                      -
+                    </button>
+                    <strong style={{ fontSize: '1.3rem', color: 'var(--color-ink)' }}>{lead.score} <span style={{fontSize:'0.9rem', color:'gray'}}>/ 100</span></strong>
+                    <button 
+                      onClick={() => handleUpdateScore(lead.id, Math.min(100, lead.score + 5))} 
+                      style={{ background: 'transparent', border: '1px solid rgba(243,238,226,0.3)', color: 'var(--color-ink)', borderRadius: '4px', width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', lineHeight: '1' }}
+                      title="Sumar 5 puntos"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
