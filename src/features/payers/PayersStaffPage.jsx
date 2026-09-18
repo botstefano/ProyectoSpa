@@ -300,7 +300,7 @@ export default function PayersStaffPage() {
         <section className="payers-hero">
           <div>
             <div className="payers-kicker">Sistema de Gestión · Metodología IMPULSE</div>
-            <h1>Fase 3: PAYERS</h1>
+            <h1>PAYERS</h1>
             <p>Gestión de pagos, activación del servicio y seguimiento de cuotas.</p>
           </div>
 
@@ -697,7 +697,7 @@ export default function PayersStaffPage() {
 
       <footer className="payers-footer">
         <span>© 2026 Origen Spa &amp; Bienestar</span>
-        <span>Sistema de Gestión · Fase 3: PAYERS</span>
+        <span>Sistema de Gestión · PAYERS</span>
         <span>Relajación · Bienestar · Confianza</span>
       </footer>
     </div>

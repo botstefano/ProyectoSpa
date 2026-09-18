@@ -21,7 +21,7 @@ cp .env.example .env
 ```
 
 
-## 1.1 Demo de Fase 3 — PAYERS
+## 1.1 PAYERS
 
 La interfaz implementada de la Fase 3 está disponible en:
 
