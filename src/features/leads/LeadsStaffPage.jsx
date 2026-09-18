@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { obtenerLeads, calificarLead, aceptarPropuesta } from "./api/leadsApi";
+import { obtenerLeads, calificarLead, aceptarPropuesta, actualizarLead } from "./api/leadsApi";
 import { obtenerNotificacionesPendientes, marcarNotificacionLeida } from "../../lib/notificaciones";
 
 const TABS = ["Perfil", "Propuesta", "Historial", "Notas", "Actividades"];
@@ -213,6 +213,31 @@ export default function LeadsStaffPage() {
     } catch (err) {
       console.error('[Leads] Error aceptando propuesta:', err);
       show("Error al aceptar propuesta. Verifica la conexión a Supabase.");
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    if (!lead) return;
+    
+    try {
+      // Preparar datos del contacto para actualizar
+      const datosContacto = {
+        nombre: lead.perfil.nombre,
+        telefono: lead.perfil.telefono,
+        email: lead.perfil.email
+      };
+
+      // Preparar datos del lead_detalle para actualizar
+      const datosLeadDetalle = {
+        lead_score: lead.score
+      };
+
+      await actualizarLead(lead.id, datosContacto, datosLeadDetalle);
+      
+      show("✅ Cambios guardados exitosamente");
+    } catch (err) {
+      console.error('[Leads] Error guardando cambios:', err);
+      show("Error al guardar cambios. Verifica la conexión a Supabase.");
     }
   };
 
@@ -671,7 +696,7 @@ export default function LeadsStaffPage() {
                 <button className="ln-btn-ghost" onClick={() => show("Creando nuevo lead...")}>+ Nuevo Lead</button>
                 <div style={{ display: 'flex', gap: '0.8rem' }}>
                   <button className="ln-btn-ghost" onClick={() => show("Cambios descartados")}>Cancelar</button>
-                  <button className="ln-btn-primary" onClick={() => show("Cambios guardados exitosamente")}>
+                  <button className="ln-btn-primary" onClick={handleSaveChanges}>
                     <IcoSave/> Guardar Cambios
                   </button>
                 </div>

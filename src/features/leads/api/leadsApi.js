@@ -154,3 +154,43 @@ export async function aceptarPropuesta(idContacto, datosPropuesta) {
 
   return { success: true, message: 'Propuesta aceptada, listo para pasar a PAYERS' }
 }
+
+/**
+ * Actualiza los datos del contacto y del lead_detalle
+ */
+export async function actualizarLead(idContacto, datosContacto, datosLeadDetalle) {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+
+  try {
+    // Actualizar datos del contacto si se proporcionan
+    if (datosContacto && Object.keys(datosContacto).length > 0) {
+      const { error: contactError } = await supabase
+        .from('contacto')
+        .update(datosContacto)
+        .eq('id_contacto', idContacto)
+
+      if (contactError) {
+        console.error('[leadsApi] Error actualizando contacto:', contactError.message)
+        throw contactError
+      }
+    }
+
+    // Actualizar datos del lead_detalle si se proporcionan
+    if (datosLeadDetalle && Object.keys(datosLeadDetalle).length > 0) {
+      const { error: leadError } = await supabase
+        .from('lead_detalle')
+        .update(datosLeadDetalle)
+        .eq('id_contacto', idContacto)
+
+      if (leadError) {
+        console.error('[leadsApi] Error actualizando lead_detalle:', leadError.message)
+        throw leadError
+      }
+    }
+
+    return { success: true, message: 'Datos actualizados correctamente' }
+  } catch (error) {
+    console.error('[leadsApi] Error en actualizarLead:', error.message)
+    throw error
+  }
+}
