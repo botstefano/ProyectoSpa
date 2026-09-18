@@ -4,8 +4,10 @@ Landing page real + base de datos compartida para el proyecto de **Inteligencia 
 Metodología IMPULSE** (caso "Buyers y Leads de un Spa de Belleza").
 
 - **Fase 1 (BUYERS)** está completa y funcional: landing pública que captura contactos reales.
-- **Fases 2 y 3** conservan sus paneles de trabajo del equipo. **Fase 4 (CUSTOMERS)** ya incluye
-  el módulo de Atención/Registro de Servicio, seguimiento, KPI y alertas de impulsamiento.
+- **Fase 2 (LEADS)** está completamente implementada con sistema de calificación y propuestas.
+- **Fase 3 (PAYERS)** tiene API real conectada a Supabase con gestión de pagos.
+- **Fase 4 (CUSTOMERS)** incluye módulo de Atención/Registro de Servicio, seguimiento, KPI y alertas.
+- **Flujo conectado**: Las fases están integradas con transiciones automáticas y notificaciones.
 
 ## Stack
 
@@ -70,6 +72,7 @@ la tabla `contacto` de tu proyecto Supabase (revísalo en **Table Editor**).
 src/
   lib/
     supabaseClient.js     <- cliente único de Supabase, usado por TODAS las fases
+    notificaciones.js     <- sistema de notificaciones entre fases
   shared/
     components/           <- Navbar, Footer — reutilizables en cualquier pantalla
   features/
@@ -77,11 +80,19 @@ src/
       BuyersLanding.jsx     <- ensambla la página pública
       components/           <- Hero, WhyUs, Services, LeadForm
       api/buyersApi.js      <- toda la lógica de Supabase de esta fase
-    leads/                  <- FASE 2 (placeholder, ver comentarios en el archivo)
-    payers/                 <- FASE 3 (placeholder)
+    leads/                  <- FASE 2 (completa)
+      LeadsStaffPage.jsx    <- panel de negociación con lead score
+      api/leadsApi.js       <- calificación, transiciones y notificaciones
+    payers/                 <- FASE 3 (API real + UI demo)
+      PayersStaffPage.jsx   <- panel de pagos (modo demo)
+      api/payersApi.js      <- API real conectada a Supabase
     customers/              <- FASE 4 (implementada: atención + seguimiento + KPI)
+      CustomersStaffPage.jsx <- panel de atención al cliente
+      api/customersApi.js   <- registro de atenciones y transiciones
 supabase/
   schema.sql               <- esquema completo de base de datos (correr una sola vez)
+  migrations/
+    fase4_customers.sql    <- migración específica para Fase 4
 ```
 
 ## 5. Guía para el equipo (Fases 2, 3 y 4)
