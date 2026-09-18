@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from "react";
 import { obtenerLeads, calificarLead } from "./api/leadsApi";
+import { obtenerNotificacionesPendientes, marcarNotificacionLeida } from "../../lib/notificaciones";
 
 const TABS = ["Perfil", "Propuesta", "Historial", "Notas", "Actividades"];
 
@@ -59,6 +60,8 @@ export default function LeadsStaffPage() {
   const [tab, setTab] = useState("Perfil"); // Cambiado por defecto a Perfil para ver la nueva pantalla
   const [note, setNote] = useState("");
   const [toast, setToast] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   function show(msg) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
@@ -143,6 +146,31 @@ export default function LeadsStaffPage() {
     cargarDatos();
   }, []);
 
+  // Cargar notificaciones periódicamente
+  useEffect(() => {
+    async function cargarNotificaciones() {
+      try {
+        const notifs = await obtenerNotificacionesPendientes('leads');
+        setNotifications(notifs);
+      } catch (error) {
+        console.error('[Leads] Error cargando notificaciones:', error);
+      }
+    }
+    
+    cargarNotificaciones();
+    const interval = setInterval(cargarNotificaciones, 30000); // Cada 30 segundos
+    return () => clearInterval(interval);
+  }, []);
+
+  async function handleMarkAsRead(idNotificacion) {
+    try {
+      await marcarNotificacionLeida(idNotificacion);
+      setNotifications(prev => prev.filter(n => n.id_notificacion !== idNotificacion));
+    } catch (error) {
+      console.error('[Leads] Error marcando notificación como leída:', error);
+    }
+  }
+
   const handleUpdateScore = async (id, newScore) => {
     try {
       await calificarLead(id, newScore);
@@ -185,13 +213,46 @@ export default function LeadsStaffPage() {
           </div>
           <nav className="ln-nav">
             <a href="/">Inicio</a>
-            <a href="/staff/leads" className="ln-nav-active">Clientes</a>
-            <a href="#">Servicios</a>
-            <a href="#">Citas</a>
-            <a href="#">Reportes</a>
+            <a href="/staff/leads" className="ln-nav-active">Leads</a>
+            <a href="/staff/payers">Pagos</a>
+            <a href="/staff/customers">Clientes</a>
           </nav>
           <div className="ln-navbar-right">
-            <button className="ln-icon-btn"><IcoBell/><span className="ln-badge">3</span></button>
+            <button className="ln-icon-btn" onClick={() => setShowNotifications(!showNotifications)}>
+              <IcoBell/>
+              {notifications.length > 0 && <span className="ln-badge">{notifications.length}</span>}
+            </button>
+            {showNotifications && (
+              <div className="ln-notifications-dropdown">
+                <div className="ln-notifications-header">
+                  <span>Notificaciones</span>
+                  <span className="ln-notifications-count">{notifications.length}</span>
+                </div>
+                {notifications.length === 0 ? (
+                  <div className="ln-notifications-empty">No hay notificaciones pendientes</div>
+                ) : (
+                  <div className="ln-notifications-list">
+                    {notifications.map(notif => (
+                      <div key={notif.id_notificacion} className="ln-notification-item">
+                        <div className="ln-notification-content">
+                          <span className="ln-notification-type">{notif.tipo_evento}</span>
+                          <span className="ln-notification-message">{notif.mensaje}</span>
+                          <span className="ln-notification-time">
+                            {new Date(notif.fecha_creacion).toLocaleString('es-ES')}
+                          </span>
+                        </div>
+                        <button 
+                          className="ln-notification-close"
+                          onClick={() => handleMarkAsRead(notif.id_notificacion)}
+                        >
+                          <IcoCheck/>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <button className="ln-agent-btn">
               <div className="ln-agent-avatar">A</div><span>Hola, Agente</span><IcoCaret/>
             </button>

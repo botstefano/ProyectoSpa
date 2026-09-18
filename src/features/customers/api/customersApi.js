@@ -121,40 +121,55 @@ function toCustomer(row) {
     email: row.email,
     estado_pago: pago?.estado_pago ?? 'Sin pago registrado',
     fecha_pago: pago?.fecha_pago ?? null,
-    servicio_contratado: pago?.servicio_contratado ?? 'Servicio contratado en Fase 3',
+    servicio_contratado: pago?.servicio_contratado || pago?.servicio_contratado 
+      ? pago.servicio_contratado 
+      : 'Servicio contratado en Fase 3',
   }
 }
 
 /**
- * Lista contactos con su estado de pago. Si Supabase todavía no tiene los datos
- * de Fase 3 o la migración de Fase 4 no fue aplicada, retorna datos de demostración.
+ * Lista contactos con su estado de pago. Si Supabase está configurado y tiene datos,
+ * los usa; si no, retorna datos de demostración.
  */
 export async function listCustomersForAttention() {
   if (!isSupabaseConfigured || !supabase) {
+    console.log('[customersApi] Supabase no configurado, usando modo demo')
     return { data: readDemoState().contacts, source: 'demo' }
   }
 
-  const { data, error } = await supabase
-    .from('contacto')
-    .select('id_contacto,nombre,telefono,email,pago_detalle(estado_pago,fecha_pago)')
-    .order('id_contacto', { ascending: false })
-    .limit(100)
+  try {
+    const { data, error } = await supabase
+      .from('contacto')
+      .select('id_contacto,nombre,telefono,email,pago_detalle(estado_pago,fecha_pago,servicio_contratado)')
+      .order('id_contacto', { ascending: false })
+      .limit(100)
 
-  if (error || !data?.length) {
-    if (error) console.warn('[customersApi] Se usa demo:', error.message)
+    if (error) {
+      console.warn('[customersApi] Error consultando Supabase, usando demo:', error.message)
+      return { data: readDemoState().contacts, source: 'demo' }
+    }
+
+    if (!data?.length) {
+      console.log('[customersApi] No hay contactos en Supabase, usando demo')
+      return { data: readDemoState().contacts, source: 'demo' }
+    }
+
+    const customers = data.map(toCustomer)
+    
+    // Filtrar solo contactos que tienen algún detalle de pago
+    const customersWithPayment = customers.filter(c => c.estado_pago !== 'Sin pago registrado')
+    
+    if (customersWithPayment.length === 0) {
+      console.log('[customersApi] No hay contactos con datos de pago en Supabase, usando demo')
+      return { data: readDemoState().contacts, source: 'demo' }
+    }
+
+    console.log(`[customersApi] Usando ${customersWithPayment.length} contactos desde Supabase`)
+    return { data: customersWithPayment, source: 'supabase' }
+  } catch (error) {
+    console.error('[customersApi] Error inesperado, usando demo:', error.message)
     return { data: readDemoState().contacts, source: 'demo' }
   }
-
-  const customers = data.map(toCustomer)
-  // Las fases 2 y 3 del proyecto actual todavía funcionan como demo y pueden no
-  // haber persistido PAYERS en Supabase. Para que CUSTOMERS siga siendo demostrable,
-  // usamos el dataset coherente de Fase 4 hasta que exista al menos un pago confirmado.
-  if (!customers.some((item) => isPaymentConfirmed(item.estado_pago))) {
-    console.warn('[customersApi] No hay PAYERS confirmados en Supabase; se usa demo de Fase 4.')
-    return { data: readDemoState().contacts, source: 'demo' }
-  }
-
-  return { data: customers, source: 'supabase' }
 }
 
 export async function listAttentions() {

@@ -106,7 +106,13 @@ export async function aceptarPropuesta(idContacto, datosPropuesta) {
   }
 
   // Enviar notificación a PAYERS
-  await notificarPropuestaAceptada(idContacto, datosPropuesta)
+  try {
+    await notificarPropuestaAceptada(idContacto, datosPropuesta)
+    console.log('[leadsApi] Notificación enviada a PAYERS')
+  } catch (notifError) {
+    console.error('[leadsApi] Error enviando notificación:', notifError.message)
+    // No bloqueamos el flujo si falla la notificación
+  }
 
   return { success: true, message: 'Propuesta aceptada, listo para pasar a PAYERS' }
 }

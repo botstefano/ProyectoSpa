@@ -350,10 +350,9 @@ export default function CustomersStaffPage() {
             <span>Origen Spa &amp; Bienestar</span>
           </a>
           <nav className="customers-nav-links" aria-label="Navegación interna">
-            <a href="#atencion">Atención</a>
-            <a href="#historial">Historial</a>
-            <a href="#indicadores">Indicadores</a>
-            <a href="#alertas">Alertas</a>
+            <a href="/staff/leads">Leads</a>
+            <a href="/staff/payers">Pagos</a>
+            <a href="/staff/customers" className="active">Clientes</a>
           </nav>
           <div className="customers-admin"><Icon name="user" size={17} /> <span>Fase 4 · CUSTOMERS</span></div>
         </div>

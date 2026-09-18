@@ -1,29 +1,12 @@
-import { useMemo, useState } from 'react'
-
-const INITIAL_CLIENT = {
-  id_contacto: 125,
-  nombre: 'Camila Rodríguez Salas',
-  dni: '74859632',
-  telefono: '987 654 321',
-  email: 'camila.rodriguez@gmail.com',
-  estadoFase2: 'Propuesta aceptada',
-}
-
-const INITIAL_SERVICE = {
-  nombre: 'Facial Hidratante',
-  categoria: 'Facial',
-  duracion: '60 minutos',
-  fechaAtencion: '25/09/2026',
-  precioRegular: 150,
-  descuento: 20,
-  total: 130,
-}
-
-const INITIAL_SCHEDULE = [
-  { id: 1, concepto: 'Pago inicial', monto: 50, vencimiento: '17/09/2026', estado: 'Pendiente' },
-  { id: 2, concepto: 'Cuota 2', monto: 40, vencimiento: '01/10/2026', estado: 'Pendiente' },
-  { id: 3, concepto: 'Cuota 3', monto: 40, vencimiento: '15/10/2026', estado: 'Pendiente' },
-]
+import { useMemo, useState, useEffect } from 'react'
+import {
+  obtenerLeadsParaPago,
+  crearCronogramaPagos,
+  procesarPagoCompleto,
+  obtenerDetallesPago,
+  verificarPagoConfirmado
+} from './api/payersApi'
+import { isSupabaseConfigured } from '../../lib/supabaseClient'
 
 const PAYMENT_METHODS = [
   { id: 'efectivo', label: 'Efectivo', icon: 'cash' },
@@ -169,24 +152,28 @@ function MethodIcon({ name }) {
 }
 
 export default function PayersStaffPage() {
-  const [client] = useState(INITIAL_CLIENT)
-  const [service] = useState(INITIAL_SERVICE)
-  const [schedule, setSchedule] = useState(INITIAL_SCHEDULE)
+  const [clients, setClients] = useState([])
+  const [selectedClient, setSelectedClient] = useState(null)
+  const [service, setService] = useState(null)
+  const [schedule, setSchedule] = useState([])
   const [selectedMethod, setSelectedMethod] = useState('yape-plin')
-  const [amount, setAmount] = useState('50')
+  const [amount, setAmount] = useState(service ? String(service.total / 3) : '')
   const [reference, setReference] = useState('')
   const [result, setResult] = useState('confirmado')
   const [history, setHistory] = useState([])
   const [notice, setNotice] = useState('')
   const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [source, setSource] = useState('demo')
+  const [paymentDetails, setPaymentDetails] = useState(null)
 
   const confirmedTotal = useMemo(
     () => history.filter((item) => item.resultado === 'Confirmado').reduce((sum, item) => sum + item.monto, 0),
     [history],
   )
 
-  const balance = Math.max(service.total - confirmedTotal, 0)
-  const initialPaid = schedule[0].estado === 'Pagada'
+  const balance = service ? Math.max(service.total - confirmedTotal, 0) : 0
+  const initialPaid = schedule.length > 0 && schedule[0].estado === 'Pagada'
   const serviceStatus = initialPaid ? 'Servicio activado' : 'Por activar'
   const paymentStatus = initialPaid ? 'Pago confirmado' : 'Pago pendiente'
 
@@ -197,12 +184,75 @@ export default function PayersStaffPage() {
   const rejectedRate =
     history.length === 0 ? 4 : Math.round((history.filter((item) => item.resultado === 'Rechazado').length / history.length) * 100)
 
+  // Cargar clientes desde Supabase
+  useEffect(() => {
+    async function loadClients() {
+      try {
+        setLoading(true)
+        const leads = await obtenerLeadsParaPago()
+        
+        if (leads.length > 0) {
+          setClients(leads)
+          setSelectedClient(leads[0])
+          
+          // Configurar servicio por defecto basado en el lead
+          const defaultService = {
+            nombre: leads[0].descarga?.[0]?.interes || 'Servicio general',
+            categoria: 'General',
+            duracion: '60 minutos',
+            fechaAtencion: new Date().toLocaleDateString('es-ES'),
+            precioRegular: 150,
+            descuento: 20,
+            total: 130,
+          }
+          setService(defaultService)
+          
+          // Crear cronograma inicial
+          const cronograma = await crearCronogramaPagos(leads[0].id_contacto, defaultService.nombre, defaultService.total, 3)
+          setSchedule(cronograma.map((item, index) => ({
+            id: index + 1,
+            concepto: item.concepto,
+            monto: item.monto,
+            vencimiento: new Date(item.fecha_vencimiento).toLocaleDateString('es-ES'),
+            estado: item.estado === 'pendiente' ? 'Pendiente' : item.estado
+          })))
+          
+          // Obtener detalles de pago existentes
+          const detalles = await obtenerDetallesPago(leads[0].id_contacto)
+          if (detalles) {
+            setPaymentDetails(detalles)
+            setSource('supabase')
+          }
+        } else {
+          setSource('demo')
+        }
+      } catch (error) {
+        console.error('[Payers] Error cargando clientes:', error)
+        setSource('demo')
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    if (isSupabaseConfigured) {
+      loadClients()
+    } else {
+      setSource('demo')
+      setLoading(false)
+    }
+  }, [])
+
   function showNotice(message) {
     setNotice(message)
     window.setTimeout(() => setNotice(''), 4200)
   }
 
-  function registerPayment() {
+  async function registerPayment() {
+    if (!selectedClient) {
+      showNotice('Selecciona un cliente primero.')
+      return
+    }
+
     const numericAmount = Number(amount)
 
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
@@ -216,36 +266,63 @@ export default function PayersStaffPage() {
     }
 
     const methodLabel = PAYMENT_METHODS.find((method) => method.id === selectedMethod)?.label ?? selectedMethod
-    const paymentDate = '17/09/2026'
-    const transaction = {
-      id: Date.now(),
-      fecha: paymentDate,
-      metodo: methodLabel,
-      monto: numericAmount,
-      resultado: result === 'confirmado' ? 'Confirmado' : result === 'rechazado' ? 'Rechazado' : 'Pendiente',
-      referencia: reference.trim() || '—',
+    const paymentDate = new Date().toLocaleDateString('es-ES')
+    
+    // Datos del pago para Supabase
+    const datosPago = {
+      estado_pago: result === 'confirmado' ? 'confirmado' : result === 'rechazado' ? 'rechazado' : 'pendiente',
+      fecha_pago: new Date().toISOString(),
+      servicio_contratado: service?.nombre || 'Servicio general',
+      monto_total: service?.total || numericAmount,
+      metodo_pago: methodLabel
     }
 
-    setHistory((prev) => [transaction, ...prev])
+    try {
+      // Procesar pago en Supabase
+      if (source === 'supabase') {
+        await procesarPagoCompleto(selectedClient.id_contacto, datosPago)
+      }
 
-    if (transaction.resultado === 'Confirmado') {
-      let remaining = numericAmount
-      const nextSchedule = schedule.map((item) => {
-        if (item.estado !== 'Pagada' && remaining >= item.monto) {
-          remaining -= item.monto
-          return { ...item, estado: 'Pagada' }
+      const transaction = {
+        id: Date.now(),
+        fecha: paymentDate,
+        metodo: methodLabel,
+        monto: numericAmount,
+        resultado: result === 'confirmado' ? 'Confirmado' : result === 'rechazado' ? 'Rechazado' : 'Pendiente',
+        referencia: reference.trim() || '—',
+      }
+
+      setHistory((prev) => [transaction, ...prev])
+
+      if (transaction.resultado === 'Confirmado') {
+        let remaining = numericAmount
+        const nextSchedule = schedule.map((item) => {
+          if (item.estado !== 'Pagada' && remaining >= item.monto) {
+            remaining -= item.monto
+            return { ...item, estado: 'Pagada' }
+          }
+          return item
+        })
+        setSchedule(nextSchedule)
+        
+        // Actualizar detalles de pago
+        const updatedDetails = await obtenerDetallesPago(selectedClient.id_contacto)
+        if (updatedDetails) {
+          setPaymentDetails(updatedDetails)
         }
-        return item
-      })
-      setSchedule(nextSchedule)
-      showNotice('Pago confirmado. La reserva quedó habilitada y el servicio se activó correctamente.')
-    } else if (transaction.resultado === 'Rechazado') {
-      showNotice('Pago rechazado. El servicio permanece pendiente de activación.')
-    } else {
-      showNotice('Pago registrado como pendiente de validación.')
-    }
+        
+        showNotice('Pago confirmado. La reserva quedó habilitada y el servicio se activó correctamente.')
+      } else if (transaction.resultado === 'Rechazado') {
+        showNotice('Pago rechazado. El servicio permanece pendiente de activación.')
+      } else {
+        showNotice('Pago registrado como pendiente de validación.')
+      }
 
-    setReference('')
+      setReference('')
+    } catch (error) {
+      console.error('[Payers] Error registrando pago:', error)
+      showNotice(`Error al registrar pago: ${error.message}`)
+    }
   }
 
   function confirmService() {
@@ -258,6 +335,17 @@ export default function PayersStaffPage() {
       return
     }
     showNotice('Comprobante/constancia generado en modo demo.')
+  }
+
+  if (loading) {
+    return (
+      <div className="payers-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div style={{ textAlign: 'center', color: 'white' }}>
+          <h2>Cargando sistema de pagos...</h2>
+          <p>{source === 'supabase' ? 'Conectando a Supabase' : 'Modo demo'}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -275,10 +363,9 @@ export default function PayersStaffPage() {
 
           <nav className="payers-nav-links" aria-label="Navegación interna">
             <a href="/">Inicio</a>
-            <a href="#cliente">Clientes</a>
-            <a href="#servicio">Servicios</a>
-            <a href="#agenda">Citas</a>
-            <a href="#indicadores">Reportes</a>
+            <a href="/staff/leads">Leads</a>
+            <a href="/staff/payers" className="active">Pagos</a>
+            <a href="/staff/customers">Clientes</a>
           </nav>
 
           <div className="payers-user-tools">
@@ -323,7 +410,7 @@ export default function PayersStaffPage() {
 
         <div className="payers-note">
           <Icon name="info" size={18} />
-          <span>Modo demo: el registro de pagos se mantiene en memoria para que puedas ejecutar y presentar el flujo sin configurar Supabase.</span>
+          <span>{source === 'supabase' ? 'Conectado a Supabase: datos reales del sistema' : 'Modo demo: el registro de pagos se mantiene en memoria'}</span>
         </div>
 
         <section className="payers-grid payers-top-grid">
@@ -343,73 +430,95 @@ export default function PayersStaffPage() {
               </button>
             </div>
 
-            <div className="client-profile">
-              <div className="client-avatar" aria-hidden="true">CR</div>
-              <div className="client-data">
-                <h3>{client.nombre}</h3>
-                <div className="client-meta">
-                  <span><strong>ID Contacto:</strong> {client.id_contacto}</span>
-                  <span><strong>DNI:</strong> {client.dni}</span>
-                  <span><strong>Teléfono:</strong> {client.telefono}</span>
-                  <span><strong>Email:</strong> {client.email}</span>
+            {selectedClient ? (
+              <>
+                <div className="client-profile">
+                  <div className="client-avatar" aria-hidden="true">
+                    {selectedClient.nombre.split(' ').slice(0, 2).map((part) => part[0]).join('')}
+                  </div>
+                  <div className="client-data">
+                    <h3>{selectedClient.nombre}</h3>
+                    <div className="client-meta">
+                      <span><strong>ID Contacto:</strong> {selectedClient.id_contacto}</span>
+                      <span><strong>Teléfono:</strong> {selectedClient.telefono || 'No provisto'}</span>
+                      <span><strong>Email:</strong> {selectedClient.email || 'No provisto'}</span>
+                      <span><strong>Lead Score:</strong> {selectedClient.lead_detalle?.[0]?.lead_score || 'N/A'}</span>
+                    </div>
+                    <div className="phase-status">
+                      <span>Estado Fase 2:</span>
+                      <b>Lead calificado</b>
+                    </div>
+                  </div>
                 </div>
-                <div className="phase-status">
-                  <span>Estado Fase 2:</span>
-                  <b>{client.estadoFase2}</b>
-                </div>
-              </div>
-            </div>
 
-            <div className="client-proof">
-              <Icon name="check" size={17} />
-              <span>Lead proveniente de Fase 2 con propuesta aceptada y cita agendada.</span>
-            </div>
+                <div className="client-proof">
+                  <Icon name="check" size={17} />
+                  <span>Lead proveniente de Fase 2 con lead score ≥ 50, listo para proceso de pago.</span>
+                </div>
+              </>
+            ) : (
+              <div className="client-proof">
+                <Icon name="info" size={17} />
+                <span>No hay leads calificados disponibles. Registra leads en Fase 2 primero.</span>
+              </div>
+            )}
           </article>
 
           <article className="payers-card" id="servicio">
             <div className="payers-card-title">
               <h2>2. Servicio contratado</h2>
-              <button className="outline-button" type="button" onClick={() => showNotice('Edición controlada del servicio: disponible en la demo visual.')}>
-                <Icon name="edit" size={16} /> Editar
-              </button>
+              {service && (
+                <button className="outline-button" type="button" onClick={() => showNotice('Edición controlada del servicio: disponible en la demo visual.')}>
+                  <Icon name="edit" size={16} /> Editar
+                </button>
+              )}
             </div>
 
-            <div className="service-summary">
-              <div className="service-visual" aria-hidden="true">
-                <div className="face-illustration">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                <small>Origen Wellness</small>
-              </div>
-
-              <div className="service-content">
-                <div className="service-head">
-                  <div>
-                    <h3>{service.nombre}</h3>
-                    <span>{service.duracion} · Categoría {service.categoria}</span>
+            {service ? (
+              <>
+                <div className="service-summary">
+                  <div className="service-visual" aria-hidden="true">
+                    <div className="face-illustration">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <small>Origen Wellness</small>
                   </div>
-                  <span className="service-state">{serviceStatus}</span>
+
+                  <div className="service-content">
+                    <div className="service-head">
+                      <div>
+                        <h3>{service.nombre}</h3>
+                        <span>{service.duracion} · Categoría {service.categoria}</span>
+                      </div>
+                      <span className="service-state">{serviceStatus}</span>
+                    </div>
+
+                    <div className="service-date">
+                      <Icon name="calendar" size={17} />
+                      <span>Fecha de atención: <strong>{service.fechaAtencion}</strong></span>
+                    </div>
+
+                    <div className="service-pricing">
+                      <div><span>Precio regular</span><strong>{money(service.precioRegular)}</strong></div>
+                      <div><span>Descuento</span><strong>- {money(service.descuento)}</strong></div>
+                      <div className="service-total"><span>Total del servicio</span><strong>{money(service.total)}</strong></div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="service-date">
-                  <Icon name="calendar" size={17} />
-                  <span>Fecha de atención: <strong>{service.fechaAtencion}</strong></span>
-                </div>
-
-                <div className="service-pricing">
-                  <div><span>Precio regular</span><strong>{money(service.precioRegular)}</strong></div>
-                  <div><span>Descuento</span><strong>- {money(service.descuento)}</strong></div>
-                  <div className="service-total"><span>Total del servicio</span><strong>{money(service.total)}</strong></div>
-                </div>
+                <button className="secondary-cta" type="button" onClick={confirmService}>
+                  <Icon name="check" size={17} />
+                  Confirmar contratación y generar constancia
+                </button>
+              </>
+            ) : (
+              <div className="client-proof">
+                <Icon name="info" size={17} />
+                <span>Selecciona un cliente para ver el servicio contratado.</span>
               </div>
-            </div>
-
-            <button className="secondary-cta" type="button" onClick={confirmService}>
-              <Icon name="check" size={17} />
-              Confirmar contratación y generar constancia
-            </button>
+            )}
           </article>
         </section>
 
