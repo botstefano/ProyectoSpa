@@ -8,6 +8,7 @@ Metodología IMPULSE** (caso "Buyers y Leads de un Spa de Belleza").
 - **Fase 3 (PAYERS)** tiene API real conectada a Supabase con gestión de pagos.
 - **Fase 4 (CUSTOMERS)** incluye módulo de Atención/Registro de Servicio, seguimiento, KPI y alertas.
 - **Flujo conectado**: Las fases están integradas con transiciones automáticas y notificaciones.
+- **Mejoras UX**: Navegación optimizada, diseño responsivo, indicadores visuales y SEO mejorado.
 
 ## Stack
 
