@@ -18,3 +18,16 @@ ALTER TABLE lead_detalle
 ADD COLUMN propuesta_aceptada BOOLEAN DEFAULT false,
 ADD COLUMN fecha_aceptacion TIMESTAMPTZ,
 ADD COLUMN datos_propuesta JSONB;
+
+
+-- Habilitar seguridad (por si acaso)
+ALTER TABLE lead_detalle ENABLE ROW LEVEL SECURITY;
+-- Borrar políticas antiguas si existen para evitar choques
+DROP POLICY IF EXISTS "leads_all_operations_lead_detalle" ON lead_detalle;
+
+CREATE POLICY "leads_all_operations_lead_detalle" 
+ON lead_detalle 
+FOR ALL 
+TO anon 
+USING (true) 
+WITH CHECK (true);
