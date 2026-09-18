@@ -607,6 +607,85 @@ button {
   to { transform: rotate(360deg); }
 }
 
+/* ---------- Responsivo ---------- */
+@media (max-width: 768px) {
+  .navbar-actions {
+    gap: 0.5rem;
+  }
+
+  .navbar-staff-link {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .dropdown-menu {
+    min-width: 180px;
+    right: -1rem;
+  }
+
+  .supabase-status {
+    display: none; /* Ocultar en móvil para ahorrar espacio */
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .hero-heading {
+    font-size: clamp(2rem, 6vw, 2.8rem);
+  }
+
+  .hero-video-container {
+    max-width: 100%;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-progress {
+    margin-bottom: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar-inner {
+    padding: 0.8rem var(--gutter);
+  }
+
+  .navbar-mark {
+    font-size: 1rem;
+  }
+
+  .navbar-cta {
+    font-size: 0.8rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-primary,
+  .btn-ghost {
+    width: 100%;
+  }
+
+  .ln-sidebar {
+    display: none; /* En móvil, podría ser un drawer */
+  }
+
+  .ln-main {
+    padding: 1rem;
+  }
+}
+
 /* ---------- Footer ---------- */
 .footer {
   padding: 2.5rem 0;
