@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { obtenerLeads, calificarLead } from "./api/leadsApi";
+import { obtenerLeads, calificarLead, aceptarPropuesta } from "./api/leadsApi";
 import { obtenerNotificacionesPendientes, marcarNotificacionLeida } from "../../lib/notificaciones";
 
 const TABS = ["Perfil", "Propuesta", "Historial", "Notas", "Actividades"];
@@ -183,6 +183,39 @@ export default function LeadsStaffPage() {
     }
   };
 
+  const handleAcceptProposal = async () => {
+    if (!lead) return;
+    
+    try {
+      const datosPropuesta = {
+        nombre: lead.propuesta.nombre,
+        precio: lead.propuesta.precioEspecial,
+        duracion: lead.propuesta.duracion,
+        incluye: lead.propuesta.incluye,
+        descuento: lead.propuesta.descuento
+      };
+      
+      await aceptarPropuesta(lead.id, datosPropuesta);
+      
+      // Actualizar el estado local del lead
+      setLeads(prev => prev.map(l => 
+        l.id === lead.id ? { 
+          ...l, 
+          propuesta: { 
+            ...l.propuesta, 
+            aceptada: true,
+            fecha_aceptacion: new Date().toISOString()
+          }
+        } : l
+      ));
+      
+      show("✅ Propuesta aceptada. El lead ahora está listo para Fase 3 (PAYERS)");
+    } catch (err) {
+      console.error('[Leads] Error aceptando propuesta:', err);
+      show("Error al aceptar propuesta. Verifica la conexión a Supabase.");
+    }
+  };
+
   // Función para manejar cambios en objetos anidados (ej: perfil.nombre)
   const handleFieldChange = (category, field, value) => {
     setLeads(prev => prev.map(l => {
@@ -343,7 +376,59 @@ export default function LeadsStaffPage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: 'rgba(200,155,92,0.1)', padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid rgba(200,155,92,0.3)' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--color-ink-muted)' }}>Lead Score:</span>
-                  <strong style={{ fontSize: '1.3rem', color: 'var(--color-ink)' }}>{lead.score} <span style={{fontSize:'0.9rem', color:'gray'}}>/ 100</span></strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="100" 
+                      value={lead.score} 
+                      onChange={(e) => {
+                        const newScore = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                        handleUpdateScore(lead.id, newScore);
+                      }}
+                      style={{ 
+                        width: '60px', 
+                        background: 'var(--color-bg)', 
+                        color: 'var(--color-ink)', 
+                        border: '1px solid var(--color-line)', 
+                        padding: '0.3rem 0.5rem', 
+                        borderRadius: '4px',
+                        fontSize: '1.2rem',
+                        fontWeight: '700'
+                      }}
+                    />
+                    <span style={{fontSize:'0.9rem', color:'gray'}}>/ 100</span>
+                    <button 
+                      type="button"
+                      onClick={() => handleUpdateScore(lead.id, Math.min(100, lead.score + 10))}
+                      style={{ 
+                        background: 'var(--color-accent)', 
+                        color: 'var(--color-ink-on-contrast)', 
+                        border: 'none', 
+                        padding: '0.3rem 0.6rem', 
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem'
+                      }}
+                    >
+                      +10
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => handleUpdateScore(lead.id, Math.max(0, lead.score - 10))}
+                      style={{ 
+                        background: 'rgba(243,238,226,0.1)', 
+                        color: 'var(--color-ink)', 
+                        border: '1px solid var(--color-line)', 
+                        padding: '0.3rem 0.6rem', 
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem'
+                      }}
+                    >
+                      -10
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -537,8 +622,40 @@ export default function LeadsStaffPage() {
                         </select>
                       </div>
                       <div className="ln-form-group">
-                        <label>Lead Score:</label>
-                        <input type="text" value={`${lead.score} / 100`} readOnly className="ln-input" style={{background: 'rgba(243,238,226,0.05)'}} />
+                        <label>Lead Score (0-100):</label>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <input 
+                            type="number" 
+                            min="0" 
+                            max="100" 
+                            value={lead.score} 
+                            onChange={(e) => {
+                              const newScore = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                              handleUpdateScore(lead.id, newScore);
+                            }}
+                            className="ln-input" 
+                            style={{ width: '80px' }}
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => handleUpdateScore(lead.id, Math.min(100, lead.score + 10))}
+                            className="ln-btn-ghost"
+                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                          >
+                            +10
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleUpdateScore(lead.id, Math.max(0, lead.score - 10))}
+                            className="ln-btn-ghost"
+                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                          >
+                            -10
+                          </button>
+                        </div>
+                        <small style={{ color: 'var(--color-ink-muted)', fontSize: '0.7rem' }}>
+                          Score ≥ 50: Transición automática a LEAD
+                        </small>
                       </div>
                       <div className="ln-form-group">
                         <label>Fecha de registro:</label>
@@ -631,7 +748,14 @@ export default function LeadsStaffPage() {
                   </div>
 
                   <div className="ln-cta-row">
-                    <button className="ln-btn-primary" onClick={() => show("Cita agendada exitosamente!")}><IcoCal/> Agendar</button>
+                    <button 
+                      className="ln-btn-primary" 
+                      onClick={handleAcceptProposal}
+                      disabled={lead.propuesta?.aceptada}
+                      style={lead.propuesta?.aceptada ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+                    >
+                      <IcoCal/> {lead.propuesta?.aceptada ? '✓ Propuesta Aceptada' : 'Aceptar Propuesta'}
+                    </button>
                     <button className="ln-btn-wa" onClick={() => show("Propuesta enviada por WhatsApp")}><IcoWA/> WhatsApp</button>
                   </div>
                   {toast && <div className="ln-toast" role="status">{toast}</div>}

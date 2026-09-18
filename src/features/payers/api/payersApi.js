@@ -3,7 +3,7 @@ import { notificarPagoConfirmado, notificarPagoRechazado } from '../../../lib/no
 
 /**
  * Obtiene leads que ya fueron calificados y están listos para pasar a PAYERS
- * Filtra por estado 'lead' y que tengan lead_score >= umbral
+ * Filtra por estado 'lead', lead_score >= umbral y propuesta_aceptada = true
  */
 export async function obtenerLeadsParaPago() {
   if (!supabase) return []
@@ -19,7 +19,10 @@ export async function obtenerLeadsParaPago() {
       estado_contacto!inner(nombre_estado),
       lead_detalle (
         lead_score,
-        fecha_calificacion
+        fecha_calificacion,
+        propuesta_aceptada,
+        fecha_aceptacion,
+        datos_propuesta
       ),
       descarga (
         interes
@@ -33,10 +36,12 @@ export async function obtenerLeadsParaPago() {
     throw error
   }
 
-  // Filtrar solo leads con score suficiente (ej: >= 50)
+  // Filtrar solo leads con score suficiente Y propuesta aceptada
   return data.filter(lead => {
     const score = lead.lead_detalle?.[0]?.lead_score || 0
-    return score >= 50
+    const propuestaAceptada = lead.lead_detalle?.[0]?.propuesta_aceptada || false
+    
+    return score >= 50 && propuestaAceptada
   })
 }
 
