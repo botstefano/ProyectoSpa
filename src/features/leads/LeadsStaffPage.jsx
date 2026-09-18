@@ -38,7 +38,7 @@ function ScoreRing({ score }) {
   );
 }
 
-// Iconos SVG (Mantenemos los mismos)
+// Iconos SVG
 function IcoBell()   { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>; }
 function IcoCaret()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>; }
 function IcoCal()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" strokeLinecap="round"/></svg>; }
@@ -56,7 +56,7 @@ export default function LeadsStaffPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [selId, setSelId] = useState(null);
-  const [tab, setTab] = useState("Perfil"); // Cambiado por defecto a Perfil para ver la nueva pantalla
+  const [tab, setTab] = useState("Perfil");
   const [note, setNote] = useState("");
   const [toast, setToast] = useState(null);
 
@@ -72,7 +72,7 @@ export default function LeadsStaffPage() {
           const desc = Array.isArray(dbLead.descarga) ? dbLead.descarga[0] : dbLead.descarga;
           const est = Array.isArray(dbLead.estado_contacto) ? dbLead.estado_contacto[0] : dbLead.estado_contacto;
 
-          const scoreReal = det?.lead_score || 0; // Si es nuevo, el score inicia en 0 automáticamente
+          const scoreReal = det?.lead_score || 0;
           const interesReal = desc?.interes || "Tratamiento facial";
           const nombrePlano = interesReal.charAt(0).toUpperCase() + interesReal.slice(1);
           const conociomonos = est?.nombre_estado === 'buyer' ? 'Instagram Ads' : 'TikTok Ads';
@@ -90,7 +90,7 @@ export default function LeadsStaffPage() {
             tags: ["#LeadNuevo", `#${nombrePlano.replace(/\s+/g, '')}`],
             
             perfil: { 
-              nombre: dbLead.nombre,
+              nombre: dbLead.nombre || "",
               edad: "27", 
               telefono: dbLead.telefono || "+51 987 654 321",
               email: dbLead.email || "No provisto", 
@@ -153,6 +153,29 @@ export default function LeadsStaffPage() {
     } catch (err) {
       show("Error al actualizar Score");
     }
+  };
+
+  // Función para manejar cambios en objetos anidados (ej: perfil.nombre)
+  const handleFieldChange = (category, field, value) => {
+    setLeads(prev => prev.map(l => {
+      if (l.id === selId) {
+        return {
+          ...l,
+          [category]: {
+            ...l[category],
+            [field]: value
+          }
+        };
+      }
+      return l;
+    }));
+  };
+
+  // Función para manejar cambios en campos de la raíz del lead (ej: temp)
+  const handleRootChange = (field, value) => {
+    setLeads(prev => prev.map(l => 
+      l.id === selId ? { ...l, [field]: value } : l
+    ));
   };
 
   const list = leads.filter(l =>
@@ -241,7 +264,7 @@ export default function LeadsStaffPage() {
             <button className="ln-back-btn" onClick={() => show("Volviendo al listado...")}>← Volver al listado</button>
           </div>
 
-          {/* Lead hero mini (Reemplaza el hero grande anterior para alinearse al mockup) */}
+          {/* Lead hero mini */}
           <div className="ln-hero" style={{ padding: '1rem 1.5rem', alignItems: 'center' }}>
             <div className="ln-hero-body" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
               <div>
@@ -251,7 +274,7 @@ export default function LeadsStaffPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--color-ink-muted)' }}>Estado del lead:</span>
-                  <select className="ln-select-input" value={lead.temp} onChange={() => {}} style={{ background: 'var(--color-bg)', color: 'var(--color-ink)', border: '1px solid var(--color-line)', padding: '0.3rem 0.5rem', borderRadius: '4px' }}>
+                  <select className="ln-select-input" value={lead.temp} onChange={(e) => handleRootChange('temp', e.target.value)} style={{ background: 'var(--color-bg)', color: 'var(--color-ink)', border: '1px solid var(--color-line)', padding: '0.3rem 0.5rem', borderRadius: '4px' }}>
                     <option value="Caliente">Caliente</option>
                     <option value="Tibio">Tibio</option>
                     <option value="Frio">Frío</option>
@@ -279,7 +302,7 @@ export default function LeadsStaffPage() {
             ))}
           </div>
 
-          {/* ── TAB: PERFIL (NUEVO DISEÑO MOCKUP) ── */}
+          {/* ── TAB: PERFIL (CAMPOS REACTIVOS) ── */}
           {tab === "Perfil" && (
             <>
               <div className="ln-grid-2">
@@ -290,23 +313,23 @@ export default function LeadsStaffPage() {
                   <div className="ln-form-grid">
                     <div className="ln-form-group">
                       <label>Nombre completo:</label>
-                      <input type="text" defaultValue={lead.perfil.nombre} className="ln-input" />
+                      <input type="text" value={lead.perfil.nombre || ""} onChange={e => handleFieldChange('perfil', 'nombre', e.target.value)} className="ln-input" />
                     </div>
                     <div className="ln-form-group">
                       <label>Edad:</label>
-                      <input type="text" defaultValue={lead.perfil.edad} className="ln-input" />
+                      <input type="text" value={lead.perfil.edad || ""} onChange={e => handleFieldChange('perfil', 'edad', e.target.value)} className="ln-input" />
                     </div>
                     <div className="ln-form-group">
                       <label>Teléfono:</label>
-                      <input type="text" defaultValue={lead.perfil.telefono} className="ln-input" />
+                      <input type="text" value={lead.perfil.telefono || ""} onChange={e => handleFieldChange('perfil', 'telefono', e.target.value)} className="ln-input" />
                     </div>
                     <div className="ln-form-group">
                       <label>Correo electrónico:</label>
-                      <input type="email" defaultValue={lead.perfil.email} className="ln-input" />
+                      <input type="email" value={lead.perfil.email || ""} onChange={e => handleFieldChange('perfil', 'email', e.target.value)} className="ln-input" />
                     </div>
                     <div className="ln-form-group">
                       <label>Distrito:</label>
-                      <input type="text" defaultValue={lead.perfil.distrito} className="ln-input" />
+                      <input type="text" value={lead.perfil.distrito || ""} onChange={e => handleFieldChange('perfil', 'distrito', e.target.value)} className="ln-input" />
                     </div>
                   </div>
                 </article>
@@ -317,7 +340,7 @@ export default function LeadsStaffPage() {
                   <div className="ln-form-grid">
                     <div className="ln-form-group">
                       <label>Tratamiento de interés:</label>
-                      <select defaultValue={lead.gustos.tratamiento} className="ln-input">
+                      <select value={lead.gustos.tratamiento || ""} onChange={e => handleFieldChange('gustos', 'tratamiento', e.target.value)} className="ln-input">
                         <option value={lead.gustos.tratamiento}>{lead.gustos.tratamiento}</option>
                         <option value="Tratamiento corporal">Tratamiento corporal</option>
                         <option value="Masajes relajantes">Masajes relajantes</option>
@@ -325,7 +348,7 @@ export default function LeadsStaffPage() {
                     </div>
                     <div className="ln-form-group">
                       <label>Aroma preferido:</label>
-                      <select defaultValue={lead.gustos.aroma} className="ln-input">
+                      <select value={lead.gustos.aroma || ""} onChange={e => handleFieldChange('gustos', 'aroma', e.target.value)} className="ln-input">
                         <option value="Lavanda">Lavanda</option>
                         <option value="Cítrico">Cítrico</option>
                         <option value="Eucalipto">Eucalipto</option>
@@ -334,7 +357,7 @@ export default function LeadsStaffPage() {
                     </div>
                     <div className="ln-form-group">
                       <label>Música preferida:</label>
-                      <select defaultValue={lead.gustos.musica} className="ln-input">
+                      <select value={lead.gustos.musica || ""} onChange={e => handleFieldChange('gustos', 'musica', e.target.value)} className="ln-input">
                         <option value="Música relajante">Música relajante</option>
                         <option value="Sonidos de la naturaleza">Sonidos de la naturaleza</option>
                         <option value="Piano instrumental">Piano instrumental</option>
@@ -342,7 +365,7 @@ export default function LeadsStaffPage() {
                     </div>
                     <div className="ln-form-group">
                       <label>Horario preferido:</label>
-                      <select defaultValue={lead.gustos.horario} className="ln-input">
+                      <select value={lead.gustos.horario || ""} onChange={e => handleFieldChange('gustos', 'horario', e.target.value)} className="ln-input">
                         <option value="Sábados, tarde">Sábados, tarde</option>
                         <option value="Lunes a Viernes, mañana">Lunes a Viernes, mañana</option>
                         <option value="Lunes a Viernes, noche">Lunes a Viernes, noche</option>
@@ -350,7 +373,7 @@ export default function LeadsStaffPage() {
                     </div>
                     <div className="ln-form-group">
                       <label>Temperatura del agua:</label>
-                      <select defaultValue={lead.gustos.temperatura} className="ln-input">
+                      <select value={lead.gustos.temperatura || ""} onChange={e => handleFieldChange('gustos', 'temperatura', e.target.value)} className="ln-input">
                         <option value="Templada">Templada</option>
                         <option value="Caliente">Caliente</option>
                         <option value="Fría">Fría</option>
@@ -358,7 +381,7 @@ export default function LeadsStaffPage() {
                     </div>
                     <div className="ln-form-group" style={{alignItems: 'flex-start'}}>
                       <label style={{marginTop: '0.4rem'}}>Otras preferencias:</label>
-                      <textarea defaultValue={lead.gustos.otras} className="ln-input" style={{height: '60px', resize: 'none'}} />
+                      <textarea value={lead.gustos.otras || ""} onChange={e => handleFieldChange('gustos', 'otras', e.target.value)} className="ln-input" style={{height: '60px', resize: 'none'}} />
                     </div>
                   </div>
                 </article>
@@ -369,7 +392,7 @@ export default function LeadsStaffPage() {
                   <div className="ln-form-grid">
                     <div className="ln-form-group">
                       <label>Especialidad:</label>
-                      <select defaultValue={lead.estudiante.especialidad} className="ln-input">
+                      <select value={lead.estudiante.especialidad || ""} onChange={e => handleFieldChange('estudiante', 'especialidad', e.target.value)} className="ln-input">
                         <option value="Administración">Administración</option>
                         <option value="Ingeniería">Ingeniería</option>
                         <option value="Medicina">Medicina</option>
@@ -378,14 +401,14 @@ export default function LeadsStaffPage() {
                     </div>
                     <div className="ln-form-group">
                       <label>Nivel:</label>
-                      <select defaultValue={lead.estudiante.nivel} className="ln-input">
+                      <select value={lead.estudiante.nivel || ""} onChange={e => handleFieldChange('estudiante', 'nivel', e.target.value)} className="ln-input">
                         <option value="8vo ciclo">8vo ciclo</option>
                         <option value="Egresado">Egresado</option>
                       </select>
                     </div>
                     <div className="ln-form-group">
                       <label>Universidad:</label>
-                      <select defaultValue={lead.estudiante.universidad} className="ln-input">
+                      <select value={lead.estudiante.universidad || ""} onChange={e => handleFieldChange('estudiante', 'universidad', e.target.value)} className="ln-input">
                         <option value="UPN">UPN</option>
                         <option value="UCV">UCV</option>
                         <option value="UNT">UNT</option>
@@ -400,15 +423,15 @@ export default function LeadsStaffPage() {
                   <div className="ln-form-grid">
                     <div className="ln-form-group">
                       <label>Empresa:</label>
-                      <input type="text" defaultValue={lead.laboral.empresa} className="ln-input" />
+                      <input type="text" value={lead.laboral.empresa || ""} onChange={e => handleFieldChange('laboral', 'empresa', e.target.value)} className="ln-input" />
                     </div>
                     <div className="ln-form-group">
                       <label>Cargo:</label>
-                      <input type="text" defaultValue={lead.laboral.cargo} className="ln-input" />
+                      <input type="text" value={lead.laboral.cargo || ""} onChange={e => handleFieldChange('laboral', 'cargo', e.target.value)} className="ln-input" />
                     </div>
                     <div className="ln-form-group">
                       <label>Situación laboral:</label>
-                      <select defaultValue={lead.laboral.situacion} className="ln-input">
+                      <select value={lead.laboral.situacion || ""} onChange={e => handleFieldChange('laboral', 'situacion', e.target.value)} className="ln-input">
                         <option value="Actualmente trabajando">Actualmente trabajando</option>
                         <option value="Desempleado">Desempleado</option>
                         <option value="Independiente">Independiente</option>
@@ -417,14 +440,14 @@ export default function LeadsStaffPage() {
                   </div>
                 </article>
 
-                {/* Otros Datos (Abarca 2 columnas) */}
+                {/* Otros Datos */}
                 <article className="ln-card ln-span2">
                   <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Otros Datos</h3>
                   <div className="ln-grid-2">
                     <div className="ln-form-grid">
                       <div className="ln-form-group">
                         <label>Cómo nos conoció:</label>
-                        <select defaultValue={lead.otros.comoConocio} className="ln-input">
+                        <select value={lead.otros.comoConocio || ""} onChange={e => handleFieldChange('otros', 'comoConocio', e.target.value)} className="ln-input">
                           <option value="Instagram Ads">Instagram Ads</option>
                           <option value="TikTok Ads">TikTok Ads</option>
                           <option value="Referido">Referido</option>
@@ -433,20 +456,20 @@ export default function LeadsStaffPage() {
                       <div className="ln-form-group">
                         <label>Cita agendada:</label>
                         <div style={{display:'flex', width: '100%', gap:'0.5rem'}}>
-                          <input type="text" defaultValue={lead.otros.citaAgendada} className="ln-input" />
+                          <input type="text" value={lead.otros.citaAgendada || ""} onChange={e => handleFieldChange('otros', 'citaAgendada', e.target.value)} className="ln-input" />
                           <button className="ln-btn-ghost" style={{padding: '0 0.8rem'}}><IcoCal/></button>
                         </div>
                       </div>
                       <div className="ln-form-group" style={{alignItems: 'flex-start'}}>
                         <label style={{marginTop: '0.4rem'}}>Observaciones:</label>
-                        <textarea defaultValue={lead.otros.observaciones} className="ln-input" style={{height: '60px', resize: 'none'}} />
+                        <textarea value={lead.otros.observaciones || ""} onChange={e => handleFieldChange('otros', 'observaciones', e.target.value)} className="ln-input" style={{height: '60px', resize: 'none'}} />
                       </div>
                     </div>
                     
                     <div className="ln-form-grid">
                       <div className="ln-form-group">
                         <label>Estado del lead:</label>
-                        <select defaultValue={lead.temp} className="ln-input">
+                        <select value={lead.temp || ""} onChange={(e) => handleRootChange('temp', e.target.value)} className="ln-input">
                           <option value="Caliente">Caliente</option>
                           <option value="Tibio">Tibio</option>
                           <option value="Frio">Frío</option>
@@ -458,7 +481,7 @@ export default function LeadsStaffPage() {
                       </div>
                       <div className="ln-form-group">
                         <label>Fecha de registro:</label>
-                        <input type="text" value={lead.otros.fechaRegistro} readOnly className="ln-input" style={{background: 'rgba(243,238,226,0.05)'}} />
+                        <input type="text" value={lead.otros.fechaRegistro || ""} readOnly className="ln-input" style={{background: 'rgba(243,238,226,0.05)'}} />
                       </div>
                     </div>
                   </div>
@@ -479,7 +502,6 @@ export default function LeadsStaffPage() {
           )}
 
           {/* ── TAB: PROPUESTA ── */}
-          {/* Mismo código anterior de la propuesta... */}
           {tab === "Propuesta" && (
             <div className="ln-propuesta-layout">
               {/* Centro */}
@@ -580,7 +602,36 @@ export default function LeadsStaffPage() {
             </div>
           )}
 
-          {/* RESTO DE TABS (Historial, Notas, Actividades)... */}
+          {/* ── TAB: HISTORIAL ── */}
+          {tab === "Historial" && (
+            <article className="ln-card">
+              <h3 className="ln-card-title">Historial de interacciones</h3>
+              <p className="ln-muted" style={{marginTop:"0.75rem"}}>Sin interacciones registradas. Llamadas, mensajes y visitas aparecerán aquí.</p>
+            </article>
+          )}
+
+          {/* ── TAB: NOTAS ── */}
+          {tab === "Notas" && (
+            <article className="ln-card">
+              <h3 className="ln-card-title">Notas del agente</h3>
+              <p className="ln-muted" style={{marginTop:"0.6rem",lineHeight:1.6}}>{lead.notas}</p>
+              <textarea className="ln-textarea" placeholder="Agregar nueva nota..."
+                value={note} onChange={e => setNote(e.target.value)}/>
+              <button className="ln-btn-ghost" style={{marginTop:"0.6rem"}} onClick={() => { show("Nota guardada"); setNote(""); }}>
+                Guardar nota
+              </button>
+            </article>
+          )}
+
+          {/* ── TAB: ACTIVIDADES ── */}
+          {tab === "Actividades" && (
+            <article className="ln-card">
+              <h3 className="ln-card-title">Actividades programadas</h3>
+              <p className="ln-muted" style={{marginTop:"0.75rem"}}>
+                No hay actividades. Usa &ldquo;Automatizar seguimiento&rdquo; para crear una.
+              </p>
+            </article>
+          )}
 
         </main>
       </div>
@@ -590,7 +641,6 @@ export default function LeadsStaffPage() {
         <span>Sistema de Gestión · Fase 2: LEADS</span>
       </footer>
 
-      {/* ESTILOS INLINE ADICIONALES PARA FORMULARIOS */}
       <style dangerouslySetInnerHTML={{__html: `
         .ln-form-grid { display: flex; flex-direction: column; gap: 0.8rem; }
         .ln-form-group { display: grid; grid-template-columns: 140px 1fr; gap: 1rem; align-items: center; }
