@@ -136,9 +136,18 @@ La ruta interna `/staff/customers` implementa la transición **PAYER → CUSTOME
 - calcula KPI de satisfacción, recompra, desviación del tiempo de atención y seguimiento en 24 h;
 - muestra alertas de impulsamiento para seguimiento, recuperación y reactivación.
 
-Si el proyecto Supabase ya fue creado con una versión anterior de `schema.sql`, ejecutar **una sola vez**
-`supabase/migrations/fase4_customers.sql` desde **Supabase → SQL Editor**. Sin Supabase configurado,
-el módulo funciona en modo demo persistente con `localStorage`, útil para exposición y pruebas locales.
+Si el proyecto Supabase ya fue creado con una versión anterior de `schema.sql`, ejecutar las migraciones correspondientes:
+
+```bash
+# Para habilitar el flujo conectado completo:
+supabase/migrations/fase2_leads.sql      # Fase 2 (LEADS)
+supabase/migrations/fase3_payers.sql     # Fase 3 (PAYERS)
+supabase/migrations/fase4_customers.sql  # Fase 4 (CUSTOMERS)
+supabase/migrations/notificaciones.sql # Sistema de notificaciones
+```
+
+Ejecutar cada script **una sola vez** desde **Supabase → SQL Editor**. Sin Supabase configurado,
+los módulos funcionan en modo demo persistente con `localStorage`, útil para exposición y pruebas locales.
 
 ## 6. Desplegar en Render
 
