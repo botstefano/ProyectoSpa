@@ -1,5 +1,4 @@
-﻿// Fase 2 - LEADS · Perfil de Negociación (Integrado con Supabase)
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { obtenerLeads, calificarLead } from "./api/leadsApi";
 
 const TABS = ["Perfil","Propuesta","Historial","Notas","Actividades"];
@@ -67,7 +66,6 @@ export default function LeadsStaffPage() {
       try {
         const data = await obtenerLeads();
         
-        // Mapeo de datos reales de BD al formato detallado de la UI
         const leadsMapeados = data.map(dbLead => {
           const scoreReal = dbLead.lead_detalle?.lead_score || 0;
           const interesReal = dbLead.descarga?.[0]?.interes || "Tratamiento facial";

@@ -1,9 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient'
 
-/**
- * Obtiene los contactos que est n en fase 'buyer' o 'lead', 
- * incluyendo su score de la tabla lead_detalle si existe.
- */
 export async function obtenerLeads() {
   if (!supabase) return []
 
@@ -35,9 +31,6 @@ export async function obtenerLeads() {
   return data
 }
 
-/**
- * Actualiza o inserta el lead_score en la tabla lead_detalle.
- */
 export async function calificarLead(idContacto, score) {
   if (!supabase) throw new Error('Supabase no est  configurado.')
 
