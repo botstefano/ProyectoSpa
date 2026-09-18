@@ -18,41 +18,18 @@ export default function Hero({ onCtaClick }) {
           </div>
         </div>
 
-        <svg
-          className="hero-illustration"
-          viewBox="0 0 420 420"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          role="img"
-          aria-label="Ilustración lineal de una rama con hojas"
+        <video
+          className="hero-video"
+          autoPlay
+          muted
+          loop
+          playsInline
+          controls
+          poster="/video/origen_spa_bienestar_ad.mp4"
         >
-          <path
-            d="M210 380 C205 300 215 220 208 60"
-            stroke="var(--color-accent)"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M208 120 C240 108 268 82 272 40"
-            stroke="var(--color-clay)"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M208 180 C172 168 146 140 140 100"
-            stroke="var(--color-clay)"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M209 240 C246 232 278 208 288 172"
-            stroke="var(--color-accent)"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M208 300 C168 292 134 266 122 228"
-            stroke="var(--color-accent)"
-            strokeWidth="1.5"
-          />
-          <circle cx="210" cy="60" r="5" stroke="var(--color-clay)" strokeWidth="1.5" />
-        </svg>
+          <source src="/video/origen_spa_bienestar_ad.mp4" type="video/mp4" />
+          Tu navegador no soporta videos HTML5.
+        </video>
       </div>
     </header>
   )

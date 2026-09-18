@@ -228,6 +228,21 @@ button {
   }
 }
 
+/* ---------- Video del Hero ---------- */
+.hero-video {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease;
+}
+
+.hero-video:hover {
+  transform: scale(1.02);
+}
+
 /* ---------- Why us: columnas planas, sin cards ---------- */
 .why-grid {
   display: grid;
