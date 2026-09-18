@@ -58,6 +58,7 @@ export default function LeadsStaffPage() {
   const [tab, setTab] = useState("Propuesta");
   const [note, setNote] = useState("");
   const [toast, setToast] = useState(null);
+  const [supabaseStatus, setSupabaseStatus] = useState("conectado");
 
   function show(msg) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
@@ -70,6 +71,7 @@ export default function LeadsStaffPage() {
           const scoreReal = dbLead.lead_detalle?.lead_score || 0;
           const interesReal = dbLead.descarga?.[0]?.interes || "Tratamiento facial";
           const nombrePlano = interesReal.charAt(0).toUpperCase() + interesReal.slice(1);
+          const estado = dbLead.estado_contacto?.nombre_estado || 'buyer';
           
           return {
             id: dbLead.id_contacto,
@@ -78,12 +80,13 @@ export default function LeadsStaffPage() {
             servicio: nombrePlano,
             score: scoreReal,
             temp: calcularTemperatura(scoreReal),
+            estado: estado,
             cita: "Pendiente de agendar",
             interes: nombrePlano,
             presupuesto: "S/ 100 - S/ 150", 
             disponibilidad: "Por confirmar", 
             frase: "Capturado desde la landing page.",
-            tags: ["#LeadNuevo", `#${nombrePlano.replace(/\s+/g, '')}`],
+            tags: ["#LeadNuevo", `#${nombrePlano.replace(/\s+/g, '')}`, `#${estado.toUpperCase()}`],
             perfil: { 
               edad: 30, 
               ocupacion: "No especificado", 
@@ -105,8 +108,10 @@ export default function LeadsStaffPage() {
         
         setLeads(leadsMapeados);
         if (leadsMapeados.length > 0) setSelId(leadsMapeados[0].id);
+        setSupabaseStatus("conectado");
       } catch (err) {
         show("Error al cargar leads desde la Base de Datos.");
+        setSupabaseStatus("demo");
       } finally {
         setLoading(false);
       }
@@ -182,11 +187,14 @@ export default function LeadsStaffPage() {
           <nav className="ln-nav">
             <a href="/">Inicio</a>
             <a href="/staff/leads" className="ln-nav-active">Clientes</a>
-            <a href="#">Servicios</a>
-            <a href="#">Citas</a>
-            <a href="#">Reportes</a>
+            <a href="/staff/payers">Pagos</a>
+            <a href="/staff/customers">Atención</a>
           </nav>
           <div className="ln-navbar-right">
+            <div className={`supabase-status supabase-${supabaseStatus}`}>
+              <span className="status-dot"></span>
+              {supabaseStatus === 'conectado' ? 'Supabase: Conectado' : 'Supabase: Demo'}
+            </div>
             <button className="ln-icon-btn">
               <IcoBell/>
               <span className="ln-badge">3</span>

@@ -25,6 +25,15 @@ export default function LeadForm() {
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
+  function formProgress() {
+    let filled = 0
+    if (form.nombre) filled++
+    if (form.email) filled++
+    if (form.telefono) filled++
+    if (form.tipoPiel && form.interes) filled++
+    return filled
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setStatus({ state: 'loading', message: '' })
@@ -46,6 +55,13 @@ export default function LeadForm() {
 
   return (
     <form className="lead-form" onSubmit={handleSubmit}>
+      <div className="form-progress">
+        <div className="progress-bar">
+          <div className="progress-fill" style={{ width: `${formProgress()}%` }}></div>
+        </div>
+        <span className="progress-text">Paso {formProgress()} de 4</span>
+      </div>
+
       <div className="field">
         <label htmlFor="nombre">Nombre completo</label>
         <input
@@ -53,21 +69,25 @@ export default function LeadForm() {
           name="nombre"
           type="text"
           required
+          placeholder="Tu nombre completo"
           value={form.nombre}
           onChange={handleChange}
+          className={form.nombre ? 'field-filled' : ''}
         />
       </div>
 
       <div className="field-row">
         <div className="field">
-          <label htmlFor="email">Correo</label>
+          <label htmlFor="email">Correo electrónico</label>
           <input
             id="email"
             name="email"
             type="email"
             required
+            placeholder="tu@email.com"
             value={form.email}
             onChange={handleChange}
+            className={form.email ? 'field-filled' : ''}
           />
         </div>
         <div className="field">
@@ -80,6 +100,7 @@ export default function LeadForm() {
             placeholder="+51 9XX XXX XXX"
             value={form.telefono}
             onChange={handleChange}
+            className={form.telefono ? 'field-filled' : ''}
           />
         </div>
       </div>
@@ -87,7 +108,7 @@ export default function LeadForm() {
       <div className="field-row">
         <div className="field">
           <label htmlFor="tipoPiel">Tipo de piel</label>
-          <select id="tipoPiel" name="tipoPiel" required value={form.tipoPiel} onChange={handleChange}>
+          <select id="tipoPiel" name="tipoPiel" required value={form.tipoPiel} onChange={handleChange} className={form.tipoPiel ? 'field-filled' : ''}>
             <option value="" disabled>
               Selecciona una opción
             </option>
@@ -100,7 +121,7 @@ export default function LeadForm() {
         </div>
         <div className="field">
           <label htmlFor="interes">Te interesa</label>
-          <select id="interes" name="interes" required value={form.interes} onChange={handleChange}>
+          <select id="interes" name="interes" required value={form.interes} onChange={handleChange} className={form.interes ? 'field-filled' : ''}>
             <option value="" disabled>
               Selecciona una opción
             </option>
@@ -112,15 +133,30 @@ export default function LeadForm() {
       </div>
 
       <button className="btn-primary" type="submit" disabled={status.state === 'loading'}>
-        {status.state === 'loading' ? 'Enviando…' : 'Quiero mi guía y diagnóstico gratuito'}
+        {status.state === 'loading' ? (
+          <span className="loading-spinner">
+            <span className="spinner"></span>
+            Enviando…
+          </span>
+        ) : 'Quiero mi guía y diagnóstico gratuito'}
       </button>
 
       <p className="form-note">
-        Al enviar aceptas que te contactemos por WhatsApp o correo sobre tu diagnóstico. Sin spam.
+        🔒 Tus datos están seguros. Solo te contactaremos por WhatsApp o correo sobre tu diagnóstico. Sin spam.
       </p>
 
-      {status.state === 'success' && <p className="form-status success">{status.message}</p>}
-      {status.state === 'error' && <p className="form-status error">{status.message}</p>}
+      {status.state === 'success' && (
+        <div className="form-status success">
+          <span className="status-icon">✓</span>
+          {status.message}
+        </div>
+      )}
+      {status.state === 'error' && (
+        <div className="form-status error">
+          <span className="status-icon">✕</span>
+          {status.message}
+        </div>
+      )}
     </form>
   )
 }
