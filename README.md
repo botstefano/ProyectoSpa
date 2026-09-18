@@ -4,8 +4,8 @@ Landing page real + base de datos compartida para el proyecto de **Inteligencia 
 Metodología IMPULSE** (caso "Buyers y Leads de un Spa de Belleza").
 
 - **Fase 1 (BUYERS)** está completa y funcional: landing pública que captura contactos reales.
-- **Fases 2, 3 y 4** tienen su estructura de carpetas lista (placeholders) para que cada equipo
-  construya su panel interno sobre la misma base de datos.
+- **Fases 2 y 3** conservan sus paneles de trabajo del equipo. **Fase 4 (CUSTOMERS)** ya incluye
+  el módulo de Atención/Registro de Servicio, seguimiento, KPI y alertas de impulsamiento.
 
 ## Stack
 
@@ -79,7 +79,7 @@ src/
       api/buyersApi.js      <- toda la lógica de Supabase de esta fase
     leads/                  <- FASE 2 (placeholder, ver comentarios en el archivo)
     payers/                 <- FASE 3 (placeholder)
-    customers/              <- FASE 4 (placeholder)
+    customers/              <- FASE 4 (implementada: atención + seguimiento + KPI)
 supabase/
   schema.sql               <- esquema completo de base de datos (correr una sola vez)
 ```
@@ -112,6 +112,21 @@ Para construir su pantalla:
    cambien las políticas RLS de su tabla del rol `anon` al rol `authenticated`.
 3. Revisen el comentario al inicio de su archivo placeholder
    (`src/features/leads/LeadsStaffPage.jsx`, etc.) — ahí está el detalle de qué tablas usar.
+
+## 5.1 Fase 4 — CUSTOMERS
+
+La ruta interna `/staff/customers` implementa la transición **PAYER → CUSTOMER**. La pantalla:
+
+- consulta el contacto y su `pago_detalle.estado_pago`;
+- bloquea la atención cuando el pago no está confirmado;
+- registra tratamiento, especialista, tiempos, estado, preferencias y observaciones;
+- al cerrar una atención como `completada`, actualiza el estado del contacto a `customer`;
+- calcula KPI de satisfacción, recompra, desviación del tiempo de atención y seguimiento en 24 h;
+- muestra alertas de impulsamiento para seguimiento, recuperación y reactivación.
+
+Si el proyecto Supabase ya fue creado con una versión anterior de `schema.sql`, ejecutar **una sola vez**
+`supabase/migrations/fase4_customers.sql` desde **Supabase → SQL Editor**. Sin Supabase configurado,
+el módulo funciona en modo demo persistente con `localStorage`, útil para exposición y pruebas locales.
 
 ## 6. Desplegar en Render
 

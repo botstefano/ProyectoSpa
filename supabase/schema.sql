@@ -75,8 +75,39 @@ create table pago_detalle (        -- propiedad de Fase 3
 );
 
 create table atencion_detalle (    -- propiedad de Fase 4
-  id_contacto            int primary key references contacto(id_contacto) on delete restrict,
-  preferencias_servicio  text
+  id_atencion              bigserial primary key,
+  id_contacto              int not null references contacto(id_contacto) on delete restrict,
+  tipo_tratamiento         varchar(100) not null,
+  especialista             varchar(100) not null,
+  fecha_hora_inicio        timestamptz not null,
+  fecha_hora_fin           timestamptz,
+  duracion_planificada_min int check (duracion_planificada_min is null or duracion_planificada_min between 10 and 240),
+  estado_atencion          varchar(20) not null default 'programada'
+                           check (estado_atencion in ('programada','en_atencion','completada','no_asistio')),
+  preferencias_servicio    text,
+  notas                    text,
+  satisfaccion             smallint check (satisfaccion is null or satisfaccion between 1 and 5),
+  seguimiento_enviado      boolean not null default false,
+  fecha_seguimiento        timestamptz,
+  proxima_atencion         date,
+  created_at               timestamptz not null default now(),
+  check (fecha_hora_fin is null or fecha_hora_fin > fecha_hora_inicio)
+);
+
+create index idx_atencion_contacto on atencion_detalle(id_contacto);
+create index idx_atencion_fecha on atencion_detalle(fecha_hora_inicio desc);
+
+create table alerta_impulsamiento_customer (
+  id_alerta       bigserial primary key,
+  id_contacto     int not null references contacto(id_contacto) on delete restrict,
+  id_atencion     bigint references atencion_detalle(id_atencion) on delete set null,
+  tipo_alerta     varchar(40) not null check (tipo_alerta in ('pago_no_confirmado','no_asistio','satisfaccion_baja','sin_seguimiento','sin_recompra')),
+  prioridad       varchar(10) not null default 'media' check (prioridad in ('alta','media','baja')),
+  agente          varchar(80) not null,
+  mensaje         text not null,
+  estado          varchar(15) not null default 'pendiente' check (estado in ('pendiente','atendida','descartada')),
+  fecha_generada  timestamptz not null default now(),
+  fecha_atendida  timestamptz
 );
 
 -- ---------------------------------------------------------------------
