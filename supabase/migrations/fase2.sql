@@ -9,3 +9,12 @@ ADD COLUMN especialidad_estudio VARCHAR(100),
 ADD COLUMN universidad VARCHAR(100),
 ADD COLUMN situacion_laboral VARCHAR(100),
 ADD COLUMN observaciones TEXT;
+
+ALTER TABLE lead_detalle
+ADD COLUMN empresa VARCHAR(100),
+ADD COLUMN cargo VARCHAR(100);
+
+ALTER TABLE lead_detalle
+ADD COLUMN propuesta_aceptada BOOLEAN DEFAULT false,
+ADD COLUMN fecha_aceptacion TIMESTAMPTZ,
+ADD COLUMN datos_propuesta JSONB;

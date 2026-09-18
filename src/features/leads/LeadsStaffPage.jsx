@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { obtenerLeads, calificarLead } from "./api/leadsApi";
+import { obtenerLeads, calificarLead, actualizarPerfilLead } from "./api/leadsApi";
 
 const TABS = ["Perfil", "Propuesta", "Historial", "Notas", "Actividades"];
 
@@ -54,6 +54,7 @@ function IcoWA()     { return <svg width="15" height="15" viewBox="0 0 24 24" fi
 export default function LeadsStaffPage() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [guardando, setGuardando] = useState(false);
   const [query, setQuery] = useState("");
   const [selId, setSelId] = useState(null);
   const [tab, setTab] = useState("Perfil");
@@ -91,33 +92,33 @@ export default function LeadsStaffPage() {
             
             perfil: { 
               nombre: dbLead.nombre || "",
-              edad: "27", 
-              telefono: dbLead.telefono || "+51 987 654 321",
-              email: dbLead.email || "No provisto", 
-              distrito: "Trujillo, La Libertad"
+              edad: det?.edad ? det.edad.toString() : "", 
+              telefono: dbLead.telefono || "",
+              email: dbLead.email || "", 
+              distrito: det?.distrito || ""
             },
             gustos: {
               tratamiento: nombrePlano,
-              aroma: "Lavanda",
-              musica: "Música relajante",
+              aroma: det?.aroma_preferido || "Lavanda",
+              musica: det?.musica_preferida || "Música relajante",
               horario: "Sábados, tarde",
-              temperatura: "Templada",
-              otras: "Prefiere ambientes tranquilos y atención personalizada."
+              temperatura: det?.temperatura_agua || "Templada",
+              otras: det?.observaciones || ""
             },
             estudiante: {
-              especialidad: "Administración",
+              especialidad: det?.especialidad_estudio || "Administración",
               nivel: "8vo ciclo",
-              universidad: "UPN"
+              universidad: det?.universidad || "UPN"
             },
             laboral: {
-              empresa: "Práctica pre-profesional",
-              cargo: "Asistente administrativo",
-              situacion: "Actualmente trabajando"
+              empresa: det?.empresa || "",
+              cargo: det?.cargo || "",
+              situacion: det?.situacion_laboral || "Actualmente trabajando"
             },
             otros: {
               comoConocio: conociomonos,
               citaAgendada: "13/09/2026 15:00",
-              observaciones: `Interesada en paquetes de cuidado. Prefiere atención por la tarde.`,
+              observaciones: det?.observaciones || "",
               fechaRegistro: new Date(dbLead.fecha_registro).toLocaleDateString('es-ES')
             },
             propuesta: { 
@@ -155,7 +156,6 @@ export default function LeadsStaffPage() {
     }
   };
 
-  // Función para manejar cambios en objetos anidados (ej: perfil.nombre)
   const handleFieldChange = (category, field, value) => {
     setLeads(prev => prev.map(l => {
       if (l.id === selId) {
@@ -171,11 +171,29 @@ export default function LeadsStaffPage() {
     }));
   };
 
-  // Función para manejar cambios en campos de la raíz del lead (ej: temp)
   const handleRootChange = (field, value) => {
     setLeads(prev => prev.map(l => 
       l.id === selId ? { ...l, [field]: value } : l
     ));
+  };
+
+  const guardarCambios = async () => {
+    const currentLead = leads.find(l => l.id === selId);
+    if (!currentLead) return;
+
+    setGuardando(true);
+    try {
+      await actualizarPerfilLead(currentLead.id, currentLead);
+      setLeads(prev => prev.map(l => 
+        l.id === selId ? { ...l, nombre: currentLead.perfil.nombre, iniciales: generarIniciales(currentLead.perfil.nombre) } : l
+      ));
+      show("Cambios guardados en la base de datos");
+    } catch (err) {
+      show(err.message || "Hubo un error al guardar los cambios");
+      console.error(err);
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const list = leads.filter(l =>
@@ -488,13 +506,13 @@ export default function LeadsStaffPage() {
                 </article>
               </div>
 
-              {/* Botonera inferior */}
+              {/* Botonera inferior conectada a la BD */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', borderTop: '1px solid var(--color-line)', paddingTop: '1.5rem' }}>
                 <button className="ln-btn-ghost" onClick={() => show("Creando nuevo lead...")}>+ Nuevo Lead</button>
                 <div style={{ display: 'flex', gap: '0.8rem' }}>
                   <button className="ln-btn-ghost" onClick={() => show("Cambios descartados")}>Cancelar</button>
-                  <button className="ln-btn-primary" onClick={() => show("Cambios guardados exitosamente")}>
-                    <IcoSave/> Guardar Cambios
+                  <button className="ln-btn-primary" onClick={guardarCambios} disabled={guardando}>
+                    <IcoSave/> {guardando ? "Guardando..." : "Guardar Cambios"}
                   </button>
                 </div>
               </div>
