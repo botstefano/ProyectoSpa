@@ -12,19 +12,10 @@ export async function obtenerLeads() {
       telefono,
       email,
       fecha_registro,
-      estado_contacto!inner(nombre_estado),
-      lead_detalle (
-        lead_score,
-        fecha_calificacion,
-        propuesta_aceptada,
-        fecha_aceptacion,
-        datos_propuesta
-      ),
-      descarga (
-        interes
-      )
+      estado_contacto (nombre_estado),
+      lead_detalle (lead_score),
+      descarga (interes)
     `)
-    .in('estado_contacto.nombre_estado', ['buyer', 'lead'])
     .order('fecha_registro', { ascending: false })
 
   if (error) {
@@ -32,7 +23,13 @@ export async function obtenerLeads() {
     throw error
   }
 
-  return data
+  const filtrados = data.filter(c => {
+    const estadoObj = Array.isArray(c.estado_contacto) ? c.estado_contacto[0] : c.estado_contacto;
+    const estado = estadoObj?.nombre_estado;
+    return estado === 'buyer' || estado === 'lead';
+  });
+
+  return filtrados;
 }
 
 /**
