@@ -18,18 +18,17 @@ export default function Hero({ onCtaClick }) {
           </div>
         </div>
 
-        <video
-          className="hero-video"
-          autoPlay
-          muted
-          loop
-          playsInline
-          controls
-          poster="/video/origen_spa_bienestar_ad.mp4"
-        >
-          <source src="/video/origen_spa_bienestar_ad.mp4" type="video/mp4" />
-          Tu navegador no soporta videos HTML5.
-        </video>
+        <div className="hero-video-container">
+          <iframe
+            className="hero-video"
+            src="https://www.youtube.com/embed/SQ9Q8grIi0k?si=LCD24IPEqWxXmEo4"
+            title="Origen Spa & Bienestar - Video de presentación"
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
+        </div>
       </div>
     </header>
   )

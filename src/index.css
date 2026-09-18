@@ -229,12 +229,16 @@ button {
 }
 
 /* ---------- Video del Hero ---------- */
+.hero-video-container {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
 .hero-video {
   width: 100%;
-  height: auto;
-  max-height: 420px;
+  aspect-ratio: 16 / 9;
   border-radius: 8px;
-  object-fit: cover;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
   transition: transform 0.3s ease;
 }
