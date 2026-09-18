@@ -90,19 +90,57 @@ export async function calificarLead(idContacto, score) {
 export async function aceptarPropuesta(idContacto, datosPropuesta) {
   if (!supabase) throw new Error('Supabase no está configurado.')
 
-  // Guardar la propuesta aceptada en lead_detalle
-  const { error } = await supabase
+  // Primero verificar si existe el registro en lead_detalle
+  const { data: existingLead, error: checkError } = await supabase
     .from('lead_detalle')
-    .update({
-      propuesta_aceptada: true,
-      fecha_aceptacion: new Date().toISOString(),
-      datos_propuesta: datosPropuesta
-    })
+    .select('lead_score')
     .eq('id_contacto', idContacto)
+    .single()
 
-  if (error) {
-    console.error('[leadsApi] Error al aceptar propuesta:', error.message)
-    throw error
+  if (checkError && checkError.code !== 'PGRST116') {
+    console.error('[leadsApi] Error verificando lead_detalle:', checkError.message)
+    throw checkError
+  }
+
+  // Si no existe el registro, crearlo primero con el score actual
+  if (!existingLead) {
+    console.log('[leadsApi] Creando registro en lead_detalle para aceptar propuesta')
+    const { error: insertError } = await supabase
+      .from('lead_detalle')
+      .insert({
+        id_contacto: idContacto,
+        lead_score: 50, // Score mínimo para que pueda pasar a PAYERS
+        fecha_calificacion: new Date().toISOString(),
+        propuesta_aceptada: true,
+        fecha_aceptacion: new Date().toISOString(),
+        datos_propuesta: datosPropuesta
+      })
+
+    if (insertError) {
+      console.error('[leadsApi] Error creando lead_detalle:', insertError.message)
+      throw insertError
+    }
+    
+    // Asegurar que el estado del contacto sea 'lead'
+    await transicionarBuyerALead(idContacto)
+  } else {
+    // Si existe, actualizarlo
+    const { error } = await supabase
+      .from('lead_detalle')
+      .update({
+        propuesta_aceptada: true,
+        fecha_aceptacion: new Date().toISOString(),
+        datos_propuesta: datosPropuesta
+      })
+      .eq('id_contacto', idContacto)
+
+    if (error) {
+      console.error('[leadsApi] Error al aceptar propuesta:', error.message)
+      throw error
+    }
+    
+    // Asegurar que el estado del contacto sea 'lead' (por si acaso)
+    await transicionarBuyerALead(idContacto)
   }
 
   // Enviar notificación a PAYERS

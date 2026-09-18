@@ -157,7 +157,7 @@ export default function PayersStaffPage() {
   const [service, setService] = useState(null)
   const [schedule, setSchedule] = useState([])
   const [selectedMethod, setSelectedMethod] = useState('yape-plin')
-  const [amount, setAmount] = useState(service ? String(service.total / 3) : '')
+  const [amount, setAmount] = useState('')
   const [reference, setReference] = useState('')
   const [result, setResult] = useState('confirmado')
   const [history, setHistory] = useState([])
@@ -189,7 +189,9 @@ export default function PayersStaffPage() {
     async function loadClients() {
       try {
         setLoading(true)
+        console.log('[Payers] Cargando clientes para pago...')
         const leads = await obtenerLeadsParaPago()
+        console.log('[Payers] Leads obtenidos:', leads.length, leads)
         
         if (leads.length > 0) {
           setClients(leads)
@@ -206,6 +208,7 @@ export default function PayersStaffPage() {
             total: 130,
           }
           setService(defaultService)
+          setAmount(String(defaultService.total / 3))
           
           // Crear cronograma inicial
           const cronograma = await crearCronogramaPagos(leads[0].id_contacto, defaultService.nombre, defaultService.total, 3)
@@ -223,7 +226,10 @@ export default function PayersStaffPage() {
             setPaymentDetails(detalles)
             setSource('supabase')
           }
+          
+          console.log('[Payers] Cliente cargado exitosamente:', leads[0].nombre)
         } else {
+          console.log('[Payers] No hay leads que cumplan con los requisitos')
           setSource('demo')
         }
       } catch (error) {
@@ -237,6 +243,7 @@ export default function PayersStaffPage() {
     if (isSupabaseConfigured) {
       loadClients()
     } else {
+      console.log('[Payers] Supabase no configurado, usando modo demo')
       setSource('demo')
       setLoading(false)
     }
@@ -413,6 +420,13 @@ export default function PayersStaffPage() {
           <span>{source === 'supabase' ? 'Conectado a Supabase: datos reales del sistema' : 'Modo demo: el registro de pagos se mantiene en memoria'}</span>
         </div>
 
+        {clients.length === 0 && (
+          <div className="payers-note" style={{ background: 'rgba(217, 175, 160, 0.1)', border: '1px solid rgba(217, 175, 160, 0.3)' }}>
+            <Icon name="alert" size={18} />
+            <span>No hay leads listos para proceso de pago. Requisitos: Estado 'lead' + Score ≥ 50 + Propuesta aceptada en FASE 2.</span>
+          </div>
+        )}
+
         <section className="payers-grid payers-top-grid">
           <article className="payers-card" id="cliente">
             <div className="payers-card-title">
@@ -489,21 +503,21 @@ export default function PayersStaffPage() {
                   <div className="service-content">
                     <div className="service-head">
                       <div>
-                        <h3>{service.nombre}</h3>
-                        <span>{service.duracion} · Categoría {service.categoria}</span>
+                        <h3>{service?.nombre || 'Sin servicio'}</h3>
+                        <span>{service?.duracion || 'N/A'} · Categoría {service?.categoria || 'N/A'}</span>
                       </div>
                       <span className="service-state">{serviceStatus}</span>
                     </div>
 
                     <div className="service-date">
                       <Icon name="calendar" size={17} />
-                      <span>Fecha de atención: <strong>{service.fechaAtencion}</strong></span>
+                      <span>Fecha de atención: <strong>{service?.fechaAtencion || 'Sin fecha'}</strong></span>
                     </div>
 
                     <div className="service-pricing">
-                      <div><span>Precio regular</span><strong>{money(service.precioRegular)}</strong></div>
-                      <div><span>Descuento</span><strong>- {money(service.descuento)}</strong></div>
-                      <div className="service-total"><span>Total del servicio</span><strong>{money(service.total)}</strong></div>
+                      <div><span>Precio regular</span><strong>{money(service?.precioRegular || 0)}</strong></div>
+                      <div><span>Descuento</span><strong>- {money(service?.descuento || 0)}</strong></div>
+                      <div className="service-total"><span>Total del servicio</span><strong>{money(service?.total || 0)}</strong></div>
                     </div>
                   </div>
                 </div>
@@ -568,7 +582,7 @@ export default function PayersStaffPage() {
                   <span>Saldo pendiente</span>
                   <strong>{money(balance)}</strong>
                 </div>
-                <span>de {money(service.total)} contratados</span>
+                <span>de {money(service?.total || 0)} contratados</span>
               </div>
 
               <div className="schedule-footnote">
@@ -745,8 +759,8 @@ export default function PayersStaffPage() {
               </div>
 
               <div className="status-grid">
-                <div><span>Servicio</span><strong>{service.nombre}</strong></div>
-                <div><span>Fecha de atención</span><strong>{service.fechaAtencion}</strong></div>
+                <div><span>Servicio</span><strong>{service?.nombre || 'Sin servicio'}</strong></div>
+                <div><span>Fecha de atención</span><strong>{service?.fechaAtencion || 'Sin fecha'}</strong></div>
                 <div><span>Estado de pago</span><strong>{paymentStatus}</strong></div>
                 <div><span>Estado del servicio</span><strong>{serviceStatus}</strong></div>
                 <div><span>Saldo pendiente</span><strong>{money(balance)}</strong></div>
