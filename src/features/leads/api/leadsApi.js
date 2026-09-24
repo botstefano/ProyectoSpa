@@ -18,7 +18,21 @@ export async function obtenerLeads() {
           fecha_registro,
           estado_contacto (nombre_estado),
           lead_detalle (lead_score),
-          descarga (interes)
+          descarga (interes),
+          enriquecimiento_contacto (
+            edad,
+            distrito,
+            ocupacion,
+            presupuesto,
+            disponibilidad,
+            preferencia_aroma,
+            preferencia_musica,
+            sensibilidad_piel,
+            motivo_principal,
+            frecuencia_deseada,
+            completado,
+            fecha_completado
+          )
         `)
         .order('fecha_registro', { ascending: false })
 

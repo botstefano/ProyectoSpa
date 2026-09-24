@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect } from "react";
 import { obtenerLeads, calificarLead, aceptarPropuesta, actualizarLead, calificarLeadAutomatico } from "./api/leadsApi";
 import { obtenerNotificacionesPendientes, marcarNotificacionLeida } from "../../lib/notificaciones";
+import { enviarEmailEnriquecimiento, tieneEnriquecimientoCompletado } from "../enriquecimiento/api/enriquecimientoApi";
 import { logger } from "../../lib/logger";
 
 const TABS = ["Perfil", "Propuesta", "Historial", "Notas", "Actividades"];
@@ -52,6 +53,7 @@ function IcoCheck()  { return <svg width="14" height="14" viewBox="0 0 14 14" fi
 function IcoSend()   { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>; }
 function IcoSave()   { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>; }
 function IcoWA()     { return <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>; }
+function IcoEmail()  { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>; }
 
 export default function LeadsStaffPage() {
   const [leads, setLeads] = useState([]);
@@ -75,11 +77,79 @@ export default function LeadsStaffPage() {
           const det = Array.isArray(dbLead.lead_detalle) ? dbLead.lead_detalle[0] : dbLead.lead_detalle;
           const desc = Array.isArray(dbLead.descarga) ? dbLead.descarga[0] : dbLead.descarga;
           const est = Array.isArray(dbLead.estado_contacto) ? dbLead.estado_contacto[0] : dbLead.estado_contacto;
+          const enriquecimiento = Array.isArray(dbLead.enriquecimiento_contacto) ? dbLead.enriquecimiento_contacto[0] : dbLead.enriquecimiento_contacto;
 
           const scoreReal = det?.lead_score || 0;
           const interesReal = desc?.interes || "Tratamiento facial";
           const nombrePlano = interesReal.charAt(0).toUpperCase() + interesReal.slice(1);
-          const conociomonos = est?.nombre_estado === 'buyer' ? 'Instagram Ads' : 'TikTok Ads';
+          const comoConocio = est?.nombre_estado === 'buyer' ? 'Instagram Ads' : 'TikTok Ads';
+          
+          // Verificar si tiene datos de enriquecimiento completados
+          const tieneEnriquecimiento = enriquecimiento && enriquecimiento.completado;
+          
+          // Usar datos de enriquecimiento si están disponibles, si no usar datos básicos
+          const datosPerfil = tieneEnriquecimiento ? {
+            nombre: dbLead.nombre || "",
+            edad: enriquecimiento.edad || "No especificado",
+            telefono: dbLead.telefono || "No provisto",
+            email: dbLead.email || "No provisto", 
+            distrito: enriquecimiento.distrito || "No especificado"
+          } : {
+            nombre: dbLead.nombre || "",
+            edad: "No especificado", 
+            telefono: dbLead.telefono || "No provisto",
+            email: dbLead.email || "No provisto", 
+            distrito: "No especificado"
+          };
+
+          const datosGustos = tieneEnriquecimiento ? {
+            tratamiento: nombrePlano,
+            aroma: enriquecimiento.preferencia_aroma || "No especificado",
+            musica: enriquecimiento.preferencia_musica || "No especificado",
+            horario: enriquecimiento.disponibilidad || "No especificado",
+            temperatura: "Templada",
+            otras: enriquecimiento.sensibilidad_piel ? `Sensibilidad: ${enriquecimiento.sensibilidad_piel}` : "No especificado"
+          } : {
+            tratamiento: nombrePlano,
+            aroma: "No especificado",
+            musica: "No especificado",
+            horario: "No especificado",
+            temperatura: "Templada",
+            otras: "Completa el formulario de enriquecimiento para más detalles"
+          };
+
+          const datosEstudiante = tieneEnriquecimiento ? {
+            especialidad: enriquecimiento.ocupacion || "No especificado",
+            nivel: "No especificado",
+            universidad: "No especificado"
+          } : {
+            especialidad: "No especificado",
+            nivel: "No especificado",
+            universidad: "No especificado"
+          };
+
+          const datosLaboral = tieneEnriquecimiento ? {
+            empresa: "No especificado",
+            cargo: enriquecimiento.ocupacion || "No especificado",
+            situacion: "No especificado"
+          } : {
+            empresa: "No especificado",
+            cargo: "No especificado",
+            situacion: "No especificado"
+          };
+
+          const datosOtros = {
+            comoConocio: comoConocio,
+            citaAgendada: "Pendiente de agendar",
+            observaciones: tieneEnriquecimiento 
+              ? `Motivo: ${enriquecimiento.motivo_principal || 'No especificado'}. Frecuencia deseada: ${enriquecimiento.frecuencia_deseada || 'No especificado'}. Presupuesto: ${enriquecimiento.presupuesto || 'No especificado'}.`
+              : "Datos básicos de contacto. Envía formulario de enriquecimiento para más información.",
+            fechaRegistro: new Date(dbLead.fecha_registro).toLocaleDateString('es-ES'),
+            enriquecimientoCompletado: tieneEnriquecimiento,
+            fechaEnriquecimiento: tieneEnriquecimiento && enriquecimiento.fecha_completado 
+              ? new Date(enriquecimiento.fecha_completado).toLocaleDateString('es-ES')
+              : null
+          };
           
           return {
             id: dbLead.id_contacto,
@@ -90,40 +160,16 @@ export default function LeadsStaffPage() {
             temp: calcularTemperatura(scoreReal),
             cita: "Pendiente de agendar",
             interes: nombrePlano,
-            frase: "Capturado desde la landing page.",
-            tags: ["#LeadNuevo", `#${nombrePlano.replace(/\s+/g, '')}`],
+            frase: tieneEnriquecimiento ? "Perfil enriquecido completado" : "Capturado desde la landing page.",
+            tags: tieneEnriquecimiento 
+              ? ["#PerfilCompleto", `#${nombrePlano.replace(/\s+/g, '')}`]
+              : ["#LeadNuevo", `#${nombrePlano.replace(/\s+/g, '')}`],
             
-            perfil: { 
-              nombre: dbLead.nombre || "",
-              edad: "27", 
-              telefono: dbLead.telefono || "+51 987 654 321",
-              email: dbLead.email || "No provisto", 
-              distrito: "Trujillo, La Libertad"
-            },
-            gustos: {
-              tratamiento: nombrePlano,
-              aroma: "Lavanda",
-              musica: "Música relajante",
-              horario: "Sábados, tarde",
-              temperatura: "Templada",
-              otras: "Prefiere ambientes tranquilos y atención personalizada."
-            },
-            estudiante: {
-              especialidad: "Administración",
-              nivel: "8vo ciclo",
-              universidad: "UPN"
-            },
-            laboral: {
-              empresa: "Práctica pre-profesional",
-              cargo: "Asistente administrativo",
-              situacion: "Actualmente trabajando"
-            },
-            otros: {
-              comoConocio: conociomonos,
-              citaAgendada: "13/09/2026 15:00",
-              observaciones: `Interesada en paquetes de cuidado. Prefiere atención por la tarde.`,
-              fechaRegistro: new Date(dbLead.fecha_registro).toLocaleDateString('es-ES')
-            },
+            perfil: datosPerfil,
+            gustos: datosGustos,
+            estudiante: datosEstudiante,
+            laboral: datosLaboral,
+            otros: datosOtros,
             propuesta: { 
               nombre: `Paquete ${nombrePlano}`, 
               desc: "Propuesta generada automáticamente basada en el interés.",
@@ -132,7 +178,9 @@ export default function LeadsStaffPage() {
               incluye: "Evaluación inicial, tratamiento y seguimiento." 
             },
             porQue: ["Se adapta a su interés inicial.", "Resultados visibles desde la primera sesión.", "Contribuye a su bienestar."],
-            notas: "Lead ingresado mediante formulario público."
+            notas: tieneEnriquecimiento 
+              ? "Lead con perfil enriquecido completado el " + datosOtros.fechaEnriquecimiento
+              : "Lead ingresado mediante formulario público. Pendiente de enriquecimiento."
           };
         });
         
@@ -279,6 +327,35 @@ export default function LeadsStaffPage() {
     } catch (err) {
       console.error('[Leads] Error guardando cambios:', err);
       show("Error al guardar cambios. Verifica la conexión a Supabase.");
+    }
+  };
+
+  const handleEnviarEnriquecimiento = async () => {
+    if (!lead) return;
+    
+    try {
+      const emailCliente = lead.perfil.email;
+      const nombreCliente = lead.perfil.nombre;
+      
+      if (!emailCliente || emailCliente === "No provisto") {
+        show("❌ El lead no tiene email registrado. No se puede enviar el formulario de enriquecimiento.");
+        return;
+      }
+
+      const result = await enviarEmailEnriquecimiento(lead.id, emailCliente, nombreCliente);
+      
+      if (result.success) {
+        if (result.data.emailEnviado) {
+          show(`✅ Email de enriquecimiento enviado a ${emailCliente}`);
+        } else {
+          show(`⚠️ Formulario creado pero email no enviado. Link manual: ${result.data.linkManual}`);
+        }
+      } else {
+        show(result.error?.message || "Error al enviar email de enriquecimiento");
+      }
+    } catch (err) {
+      logger.error('LeadsStaffPage', 'Error enviando enriquecimiento', { err });
+      show("Error al enviar email de enriquecimiento");
     }
   };
 
@@ -750,7 +827,32 @@ export default function LeadsStaffPage() {
 
               {/* Botonera inferior */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', borderTop: '1px solid var(--color-line)', paddingTop: '1.5rem' }}>
-                <button className="ln-btn-ghost" onClick={() => show("Creando nuevo lead...")}>+ Nuevo Lead</button>
+                <div style={{ display: 'flex', gap: '0.8rem' }}>
+                  <button className="ln-btn-ghost" onClick={() => show("Creando nuevo lead...")}>+ Nuevo Lead</button>
+                  {!lead.otros.enriquecimientoCompletado ? (
+                    <button 
+                      className="ln-btn-ghost" 
+                      onClick={handleEnviarEnriquecimiento}
+                      style={{ background: 'rgba(200, 155, 92, 0.1)', color: 'var(--color-accent)', border: '1px solid rgba(200, 155, 92, 0.3)' }}
+                    >
+                      <IcoSend/> Enviar Formulario Enriquecimiento
+                    </button>
+                  ) : (
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem', 
+                      padding: '0.5rem 1rem', 
+                      background: 'rgba(183, 210, 185, 0.1)', 
+                      border: '1px solid rgba(183, 210, 185, 0.3)', 
+                      borderRadius: '4px',
+                      color: '#b7d2b9',
+                      fontSize: '0.8rem'
+                    }}>
+                      <IcoCheck/> Perfil Completado
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: '0.8rem' }}>
                   <button className="ln-btn-ghost" onClick={() => show("Cambios descartados")}>Cancelar</button>
                   <button className="ln-btn-primary" onClick={handleSaveChanges}>
