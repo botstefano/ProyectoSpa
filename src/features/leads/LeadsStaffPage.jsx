@@ -2,6 +2,7 @@
 import { obtenerLeads, calificarLead, aceptarPropuesta, actualizarLead, calificarLeadAutomatico } from "./api/leadsApi";
 import { obtenerNotificacionesPendientes, marcarNotificacionLeida } from "../../lib/notificaciones";
 import { enviarEmailEnriquecimiento, tieneEnriquecimientoCompletado } from "../enriquecimiento/api/enriquecimientoApi";
+import { enviarEmailPropuesta } from "../propuestas/api/propuestasApi";
 import { logger } from "../../lib/logger";
 
 const TABS = ["Perfil", "Propuesta", "Historial", "Notas", "Actividades"];
@@ -356,6 +357,45 @@ export default function LeadsStaffPage() {
     } catch (err) {
       logger.error('LeadsStaffPage', 'Error enviando enriquecimiento', { err });
       show("Error al enviar email de enriquecimiento");
+    }
+  };
+
+  const handleEnviarPropuestaChatbot = async () => {
+    if (!lead) return;
+    
+    try {
+      const emailCliente = lead.perfil.email;
+      const nombreCliente = lead.perfil.nombre;
+      
+      if (!emailCliente || emailCliente === "No provisto") {
+        show("❌ El lead no tiene email registrado. No se puede enviar la propuesta.");
+        return;
+      }
+
+      // Preparar datos de la propuesta inicial
+      const datosPropuesta = {
+        servicio: lead.interes || 'Servicio general',
+        precio: lead.propuesta?.precioEspecial || 120,
+        precioRegular: lead.propuesta?.precioRegular || 150,
+        duracion: lead.propuesta?.duracion || '60 min',
+        descuento: lead.propuesta?.descuento || '0%',
+        incluye: lead.propuesta?.incluye || 'Evaluación inicial, tratamiento y seguimiento'
+      };
+
+      const result = await enviarEmailPropuesta(lead.id, emailCliente, nombreCliente, datosPropuesta);
+      
+      if (result.success) {
+        if (result.data.emailEnviado) {
+          show(`✅ Propuesta con chatbot enviada a ${emailCliente}`);
+        } else {
+          show(`⚠️ Propuesta creada pero email no enviado. Link manual: ${result.data.linkManual}`);
+        }
+      } else {
+        show(result.error?.message || "Error al enviar propuesta");
+      }
+    } catch (err) {
+      logger.error('LeadsStaffPage', 'Error enviando propuesta chatbot', { err });
+      show("Error al enviar propuesta");
     }
   };
 
@@ -851,6 +891,15 @@ export default function LeadsStaffPage() {
                     }}>
                       <IcoCheck/> Perfil Completado
                     </div>
+                  )}
+                  {lead.otros.enriquecimientoCompletado && (
+                    <button 
+                      className="ln-btn-ghost" 
+                      onClick={handleEnviarPropuestaChatbot}
+                      style={{ background: 'rgba(183, 210, 185, 0.1)', color: '#b7d2b9', border: '1px solid rgba(183, 210, 185, 0.3)' }}
+                    >
+                      <IcoEmail/> Enviar Propuesta con Chatbot
+                    </button>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: '0.8rem' }}>
