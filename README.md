@@ -9,6 +9,8 @@ Metodología IMPULSE** (caso "Buyers y Leads de un Spa de Belleza").
 - **Fase 4 (CUSTOMERS)** incluye módulo de Atención/Registro de Servicio, seguimiento, KPI y alertas.
 - **Flujo conectado**: Las fases están integradas con transiciones automáticas y notificaciones.
 - **Mejoras UX**: Navegación optimizada, diseño responsivo, indicadores visuales y SEO mejorado.
+- **Seguridad mejorada**: Sistema de autenticación, validación robusta de datos, auditoría de cambios.
+- **Calidad de código**: Logging centralizado, manejo de errores estandarizado, sistema de tipos, pruebas unitarias.
 
 ## Stack
 

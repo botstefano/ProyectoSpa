@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect } from "react";
-import { obtenerLeads, calificarLead, aceptarPropuesta, actualizarLead } from "./api/leadsApi";
+import { obtenerLeads, calificarLead, aceptarPropuesta, actualizarLead, calificarLeadAutomatico } from "./api/leadsApi";
 import { obtenerNotificacionesPendientes, marcarNotificacionLeida } from "../../lib/notificaciones";
+import { logger } from "../../lib/logger";
 
 const TABS = ["Perfil", "Propuesta", "Historial", "Notas", "Actividades"];
 
@@ -173,13 +174,49 @@ export default function LeadsStaffPage() {
 
   const handleUpdateScore = async (id, newScore) => {
     try {
-      await calificarLead(id, newScore);
-      setLeads(prev => prev.map(l => 
-        l.id === id ? { ...l, score: newScore, temp: calcularTemperatura(newScore) } : l
-      ));
-      show("Lead Score actualizado con éxito");
+      const result = await calificarLead(id, newScore);
+      
+      if (result.success) {
+        setLeads(prev => prev.map(l => 
+          l.id === id ? { ...l, score: newScore, temp: calcularTemperatura(newScore) } : l
+        ));
+        show("Lead Score actualizado con éxito");
+      } else {
+        show(result.error?.message || "Error al actualizar Score");
+      }
     } catch (err) {
+      logger.error('LeadsStaffPage', 'Error en handleUpdateScore', { err });
       show("Error al actualizar Score");
+    }
+  };
+
+  const handleAutoScore = async () => {
+    if (!lead) return;
+    
+    try {
+      const datosContacto = {
+        fuente: lead.otros?.comoConocio || 'Orgánico',
+        email: lead.perfil?.email,
+        telefono: lead.perfil?.telefono,
+        interes: lead.interes?.toLowerCase() || 'facial',
+        tipoPiel: 'no_se', // No tenemos este dato directo
+        fecha_registro: lead.otros?.fechaRegistro
+      };
+      
+      const result = await calificarLeadAutomatico(lead.id, datosContacto);
+      
+      if (result.success) {
+        const newScore = result.data?.score || 50;
+        setLeads(prev => prev.map(l => 
+          l.id === lead.id ? { ...l, score: newScore, temp: calcularTemperatura(newScore) } : l
+        ));
+        show(`✅ Lead Score calculado automáticamente: ${newScore}/100`);
+      } else {
+        show(result.error?.message || "Error en calificación automática");
+      }
+    } catch (err) {
+      logger.error('LeadsStaffPage', 'Error en calificación automática', { err });
+      show("Error en calificación automática");
     }
   };
 
@@ -195,23 +232,27 @@ export default function LeadsStaffPage() {
         descuento: lead.propuesta.descuento
       };
       
-      await aceptarPropuesta(lead.id, datosPropuesta);
+      const result = await aceptarPropuesta(lead.id, datosPropuesta);
       
-      // Actualizar el estado local del lead
-      setLeads(prev => prev.map(l => 
-        l.id === lead.id ? { 
-          ...l, 
-          propuesta: { 
-            ...l.propuesta, 
-            aceptada: true,
-            fecha_aceptacion: new Date().toISOString()
-          }
-        } : l
-      ));
-      
-      show("✅ Propuesta aceptada. El lead ahora está listo para Fase 3 (PAYERS)");
+      if (result.success) {
+        // Actualizar el estado local del lead
+        setLeads(prev => prev.map(l => 
+          l.id === lead.id ? { 
+            ...l, 
+            propuesta: { 
+              ...l.propuesta, 
+              aceptada: true,
+              fecha_aceptacion: new Date().toISOString()
+            }
+          } : l
+        ));
+        
+        show("✅ Propuesta aceptada. El lead ahora está listo para Fase 3 (PAYERS)");
+      } else {
+        show(result.error?.message || "Error al aceptar propuesta");
+      }
     } catch (err) {
-      console.error('[Leads] Error aceptando propuesta:', err);
+      logger.error('LeadsStaffPage', 'Error aceptando propuesta', { err });
       show("Error al aceptar propuesta. Verifica la conexión a Supabase.");
     }
   };
@@ -452,6 +493,22 @@ export default function LeadsStaffPage() {
                       }}
                     >
                       -10
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={handleAutoScore}
+                      style={{ 
+                        background: 'rgba(183,210,185,0.2)', 
+                        color: '#b7d2b9', 
+                        border: '1px solid rgba(183,210,185,0.4)', 
+                        padding: '0.3rem 0.8rem', 
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        fontWeight: '600'
+                      }}
+                    >
+                      Auto
                     </button>
                   </div>
                 </div>

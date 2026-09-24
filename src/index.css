@@ -386,6 +386,42 @@ button {
   transform: scale(1.02);
 }
 
+.hero-video-fallback {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(200, 155, 92, 0.1), rgba(217, 175, 160, 0.1));
+  border: 1px solid var(--color-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.fallback-content {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-ink);
+}
+
+.fallback-content h3 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-accent);
+}
+
+.fallback-content p {
+  color: var(--color-ink-muted);
+  margin-bottom: 1rem;
+}
+
+.fallback-description {
+  font-size: 0.9rem;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
 /* ---------- Why us: columnas planas, sin cards ---------- */
 .why-grid {
   display: grid;

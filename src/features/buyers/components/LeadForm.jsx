@@ -38,12 +38,20 @@ export default function LeadForm() {
     e.preventDefault()
     setStatus({ state: 'loading', message: '' })
     try {
-      await registrarLead({ ...form, idVisita: idVisitaRef.current })
-      setStatus({
-        state: 'success',
-        message: 'Listo. Te escribiremos por WhatsApp o correo con tu guía y los horarios disponibles.',
-      })
-      setForm(ESTADO_INICIAL)
+      const result = await registrarLead({ ...form, idVisita: idVisitaRef.current })
+      
+      if (result.success) {
+        setStatus({
+          state: 'success',
+          message: 'Listo. Te escribiremos por WhatsApp o correo con tu guía y los horarios disponibles.',
+        })
+        setForm(ESTADO_INICIAL)
+      } else {
+        setStatus({
+          state: 'error',
+          message: result.error?.message || 'No pudimos enviar tu solicitud. Intenta de nuevo en un momento.',
+        })
+      }
     } catch (err) {
       setStatus({
         state: 'error',
