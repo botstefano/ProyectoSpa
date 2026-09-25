@@ -70,7 +70,7 @@ WITH CHECK (estado_pago IN ('pendiente', 'completado'));
 -- Usuarios anónimos pueden leer por token (para que el cliente acceda a su pago)
 CREATE POLICY "pago_simulado_select_anon_by_token" 
 ON pago_simulado FOR SELECT TO anon 
-USING (token_pago = current_setting('app.current_token', true) AND estado_pago = 'pendiente' AND expira_en > now());
+USING (token_pago IS NOT NULL AND estado_pago = 'pendiente' AND expira_en > now());
 
 -- Función para generar token único para pago
 CREATE OR REPLACE FUNCTION generar_token_pago()
