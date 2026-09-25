@@ -1,91 +1,85 @@
 /**
- * Servicio de email usando Edge Function de Supabase
- * Edge Function actúa como intermediario para evitar problemas CORS con Resend API
- * Resend no permite llamadas directas desde el navegador, por eso usamos Edge Function
+ * Servicio de email con solución alternativa para CORS
+ * Dado que Edge Function tiene problemas CORS, usamos un enfoque híbrido
  */
 
 import { logger } from './logger'
-import { supabase, requireSupabase, isSupabaseConfigured } from './supabaseClient'
+import { isSupabaseConfigured } from './supabaseClient'
 
 /**
- * Envía email usando Edge Function de Supabase con llamada directa fetch
+ * Envía email usando un servicio de correo público que no tiene restricciones CORS
  * @param {string} emailCliente - Email del cliente
  * @param {string} nombreCliente - Nombre del cliente
  * @param {string} tipoEmail - Tipo de email ('enriquecimiento' o 'pago')
  * @param {object} datos - Datos adicionales según el tipo
  */
-async function enviarEmailViaEdgeFunction(emailCliente, nombreCliente, tipoEmail, datos) {
+async function enviarEmailViaServicioPublico(emailCliente, nombreCliente, tipoEmail, datos) {
   try {
-    const client = requireSupabase()
+    // Usar EmailJS como alternativa - permite llamadas desde frontend
+    const emailJsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
+    const emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
+    const emailJsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
     
-    // Obtener URL y headers de Supabase
-    const { data: { session } } = await client.auth.getSession()
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase URL o ANON_KEY no configuradas')
+    if (!emailJsServiceId || !emailJsTemplateId || !emailJsPublicKey) {
+      throw new Error('EmailJS no configurado')
     }
 
-    const functionUrl = `${supabaseUrl}/functions/v1/send-email`
-    
-    logger.info('emailService', 'Llamando a Edge Function', { 
-      url: functionUrl,
-      email: emailCliente,
-      tipo: tipoEmail
-    })
+    // Preparar datos según tipo
+    let templateParams = {
+      to_email: emailCliente,
+      to_name: nombreCliente,
+    }
 
-    const response = await fetch(functionUrl, {
+    if (tipoEmail === 'enriquecimiento') {
+      const tokenEnriquecimiento = datos?.tokenEnriquecimiento
+      const origen = datos?.origen || 'https://origen-spa.onrender.com'
+      templateParams.link_enriquecimiento = `${origen}/enriquecimiento/${tokenEnriquecimiento}`
+      templateParams.subject = 'Completa tu perfil - Origen Spa & Bienestar'
+    } else if (tipoEmail === 'pago') {
+      const tokenPago = datos?.tokenPago
+      const origenPago = datos?.origen || 'https://origen-spa.onrender.com'
+      const montoTotal = datos?.monto_total || 0
+      const servicio = datos?.servicio_contratado || 'Servicio'
+      templateParams.link_pago = `${origenPago}/pago/${tokenPago}`
+      templateParams.monto = `S/ ${montoTotal.toFixed(2)}`
+      templateParams.servicio = servicio
+      templateParams.subject = `Completa tu pago - Origen Spa & Bienestar`
+    }
+
+    // Usar EmailJS directamente
+    const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        emailCliente,
-        nombreCliente,
-        tipoEmail,
-        datos
+        service_id: emailJsServiceId,
+        template_id: emailJsTemplateId,
+        user_id: emailJsPublicKey,
+        template_params: templateParams
       })
-    })
-
-    logger.info('emailService', 'Respuesta de Edge Function', { 
-      status: response.status,
-      ok: response.ok
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      logger.error('emailService', 'Edge Function respondió con error', { 
-        status: response.status,
-        error: errorText 
-      })
-      throw new Error(`Edge Function error: ${response.status} - ${errorText}`)
+      const errorData = await response.json()
+      throw new Error(errorData.message || 'Error en EmailJS')
     }
 
-    const data = await response.json()
-    
-    logger.info('emailService', `Email de ${tipoEmail} enviado exitosamente via Edge Function`, { 
+    logger.info('emailService', `Email enviado via EmailJS`, { 
       email: emailCliente, 
-      id: data?.id 
+      tipo: tipoEmail 
     })
 
     return { 
       success: true, 
-      id: data?.id,
       mensaje: 'Email enviado exitosamente'
     }
   } catch (error) {
-    logger.error('emailService', `Error enviando email de ${tipoEmail} via Edge Function`, { 
+    logger.error('emailService', `Error enviando email via EmailJS`, { 
       error: error.message, 
-      email: emailCliente,
-      stack: error.stack 
+      email: emailCliente 
     })
-    return { 
-      success: false, 
-      error: error.message,
-      mensaje: 'Error al enviar email'
-    }
+    throw error
   }
 }
 
@@ -97,41 +91,20 @@ async function enviarEmailViaEdgeFunction(emailCliente, nombreCliente, tipoEmail
  * @param {string} origen - URL base del sitio
  */
 export async function enviarFormularioEnriquecimiento(emailCliente, nombreCliente, tokenEnriquecimiento, origen) {
-  // Verificar si Supabase está configurado
-  if (!isSupabaseConfigured) {
-    logger.warn('emailService', 'Supabase no configurado, usando modo link manual')
-    return { 
-      success: false, 
-      modo: 'link_manual',
-      mensaje: 'Supabase no configurado, pero el formulario está disponible',
-      linkManual: `${origen}/enriquecimiento/${tokenEnriquecimiento}`
-    }
-  }
-
   try {
-    const resultado = await enviarEmailViaEdgeFunction(emailCliente, nombreCliente, 'enriquecimiento', {
+    // Intentar usar EmailJS (permite llamadas desde frontend)
+    const resultado = await enviarEmailViaServicioPublico(emailCliente, nombreCliente, 'enriquecimiento', {
       tokenEnriquecimiento,
       origen
     })
 
-    if (resultado.success) {
-      return resultado
-    } else {
-      // Fallback si Edge Function falla
-      logger.warn('emailService', 'Edge Function falló, usando link manual', { error: resultado.error })
-      return { 
-        success: false, 
-        modo: 'link_manual',
-        mensaje: `Edge Function falló: ${resultado.error}. Formulario disponible vía link manual.`,
-        linkManual: `${origen}/enriquecimiento/${tokenEnriquecimiento}`
-      }
-    }
+    return resultado
   } catch (error) {
-    logger.error('emailService', 'Error en envío de email de enriquecimiento', { error })
+    logger.warn('emailService', 'EmailJS falló, usando link manual', { error: error.message })
     return { 
       success: false, 
       modo: 'link_manual',
-      mensaje: 'Error en envío, pero el formulario está disponible',
+      mensaje: `Email no enviado automáticamente: ${error.message}. Formulario disponible vía link manual.`,
       linkManual: `${origen}/enriquecimiento/${tokenEnriquecimiento}`
     }
   }
@@ -165,40 +138,20 @@ export function validarTokenFormato(token) {
  * @param {object} datosPago - Datos del pago (monto, servicio, etc.)
  */
 export async function enviarEmailPago(emailCliente, nombreCliente, tokenPago, origen, datosPago) {
-  // Verificar si Supabase está configurado
-  if (!isSupabaseConfigured) {
-    return { 
-      success: false, 
-      modo: 'link_manual',
-      mensaje: 'Supabase no configurado, pero el formulario está disponible',
-      linkManual: `${origen}/pago/${tokenPago}`
-    }
-  }
-
   try {
-    const resultado = await enviarEmailViaEdgeFunction(emailCliente, nombreCliente, 'pago', {
+    const resultado = await enviarEmailViaServicioPublico(emailCliente, nombreCliente, 'pago', {
       tokenPago,
       origen,
       ...datosPago
     })
 
-    if (resultado.success) {
-      return resultado
-    } else {
-      logger.warn('emailService', 'Edge Function falló para pago, usando link manual', { error: resultado.error })
-      return { 
-        success: false, 
-        modo: 'link_manual',
-        mensaje: `Edge Function falló: ${resultado.error}. Formulario disponible vía link manual.`,
-        linkManual: `${origen}/pago/${tokenPago}`
-      }
-    }
+    return resultado
   } catch (error) {
-    logger.error('emailService', 'Error en envío de email de pago', { error })
+    logger.warn('emailService', 'EmailJS falló para pago, usando link manual', { error: error.message })
     return { 
       success: false, 
       modo: 'link_manual',
-      mensaje: 'Error en envío, pero el formulario está disponible',
+      mensaje: `Email no enviado automáticamente: ${error.message}. Formulario disponible vía link manual.`,
       linkManual: `${origen}/pago/${tokenPago}`
     }
   }
@@ -208,40 +161,20 @@ export async function enviarEmailPago(emailCliente, nombreCliente, tokenPago, or
  * Envía recordatorio de enriquecimiento
  */
 export async function enviarRecordatorioEnriquecimiento(emailCliente, nombreCliente, tokenEnriquecimiento, origen) {
-  // Verificar si Supabase está configurado
-  if (!isSupabaseConfigured) {
-    return { 
-      success: false, 
-      modo: 'link_manual',
-      mensaje: 'Supabase no configurado, pero el formulario está disponible',
-      linkManual: `${origen}/enriquecimiento/${tokenEnriquecimiento}`
-    }
-  }
-
   try {
-    const resultado = await enviarEmailViaEdgeFunction(emailCliente, nombreCliente, 'enriquecimiento', {
+    const resultado = await enviarEmailViaServicioPublico(emailCliente, nombreCliente, 'enriquecimiento', {
       tokenEnriquecimiento,
       origen,
       esRecordatorio: true
     })
 
-    if (resultado.success) {
-      return resultado
-    } else {
-      logger.warn('emailService', 'Edge Function falló para recordatorio, usando link manual', { error: resultado.error })
-      return { 
-        success: false, 
-        modo: 'link_manual',
-        mensaje: `Edge Function falló: ${resultado.error}. Formulario disponible vía link manual.`,
-        linkManual: `${origen}/enriquecimiento/${tokenEnriquecimiento}`
-      }
-    }
+    return resultado
   } catch (error) {
-    logger.error('emailService', 'Error en envío de recordatorio', { error })
+    logger.warn('emailService', 'EmailJS falló para recordatorio, usando link manual', { error: error.message })
     return { 
       success: false, 
       modo: 'link_manual',
-      mensaje: 'Error en envío, pero el formulario está disponible',
+      mensaje: `Email no enviado automáticamente: ${error.message}. Formulario disponible vía link manual.`,
       linkManual: `${origen}/enriquecimiento/${tokenEnriquecimiento}`
     }
   }
