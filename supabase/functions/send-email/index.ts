@@ -1,19 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { corsHeaders } from 'https://esm.sh/@supabase/supabase-js@2/cors'
 
 serve(async (req) => {
-  // Configurar CORS headers para preflight
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  }
-
-  // Manejar preflight request
+  // Manejar preflight request con headers oficiales de Supabase
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { 
-      status: 200,
-      headers: corsHeaders 
-    })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   // Solo permitir POST
@@ -35,7 +26,7 @@ serve(async (req) => {
         JSON.stringify({ error: 'Faltan campos requeridos' }),
         { 
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          headers: corsHeaders
         }
       )
     }
@@ -49,7 +40,7 @@ serve(async (req) => {
         JSON.stringify({ error: 'RESEND_API_KEY no configurada en Edge Function' }),
         { 
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          headers: corsHeaders
         }
       )
     }
@@ -138,7 +129,7 @@ serve(async (req) => {
         JSON.stringify({ error: 'Tipo de email no válido' }),
         { 
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          headers: corsHeaders
         }
       )
     }
@@ -174,7 +165,7 @@ serve(async (req) => {
         mensaje: 'Email enviado exitosamente'
       }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: corsHeaders
       }
     )
 
@@ -187,7 +178,7 @@ serve(async (req) => {
       }),
       { 
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: corsHeaders
       }
     )
   }
