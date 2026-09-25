@@ -1,79 +1,82 @@
 /**
- * Servicio de email usando Edge Function de Supabase
- * Edge Function se llama 'super-task' en lugar de 'send-email'
+ * Servicio de email usando EmailJS (sin restricciones de destinatarios)
+ * Resend gratuito solo permite enviar a tu propio email
+ * EmailJS permite enviar a cualquier email con plan gratuito
  */
 
 import { logger } from './logger'
-import { isSupabaseConfigured } from './supabaseClient'
 
 /**
- * Envía email usando Edge Function de Supabase (super-task)
+ * Envía email usando EmailJS
  * @param {string} emailCliente - Email del cliente
  * @param {string} nombreCliente - Nombre del cliente
  * @param {string} tipoEmail - Tipo de email ('enriquecimiento' o 'pago')
  * @param {object} datos - Datos adicionales según el tipo
  */
-async function enviarEmailViaEdgeFunction(emailCliente, nombreCliente, tipoEmail, datos) {
+async function enviarEmailViaEmailJS(emailCliente, nombreCliente, tipoEmail, datos) {
   try {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+    const emailJsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
+    const emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
+    const emailJsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
     
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase URL o ANON_KEY no configuradas')
+    if (!emailJsServiceId || !emailJsTemplateId || !emailJsPublicKey) {
+      throw new Error('EmailJS no configurado. Configura VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID y VITE_EMAILJS_PUBLIC_KEY en tu .env')
     }
 
-    // Usar el nombre correcto de la función: super-task
-    const functionUrl = `${supabaseUrl}/functions/v1/super-task`
-    
-    logger.info('emailService', 'Llamando a Edge Function super-task', { 
-      url: functionUrl,
+    // Preparar datos según tipo
+    let templateParams = {
+      to_email: emailCliente,
+      to_name: nombreCliente,
+    }
+
+    if (tipoEmail === 'enriquecimiento') {
+      const tokenEnriquecimiento = datos?.tokenEnriquecimiento
+      const origen = datos?.origen || 'https://origen-spa.onrender.com'
+      templateParams.link_enriquecimiento = `${origen}/enriquecimiento/${tokenEnriquecimiento}`
+    } else if (tipoEmail === 'pago') {
+      const tokenPago = datos?.tokenPago
+      const origenPago = datos?.origen || 'https://origen-spa.onrender.com'
+      const montoTotal = datos?.monto_total || 0
+      const servicio = datos?.servicio_contratado || 'Servicio'
+      templateParams.link_pago = `${origenPago}/pago/${tokenPago}`
+      templateParams.monto = `S/ ${montoTotal.toFixed(2)}`
+      templateParams.servicio = servicio
+    }
+
+    logger.info('emailService', 'Enviando email via EmailJS', { 
       email: emailCliente,
       tipo: tipoEmail
     })
 
-    const response = await fetch(functionUrl, {
+    const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        emailCliente,
-        nombreCliente,
-        tipoEmail,
-        datos
+        service_id: emailJsServiceId,
+        template_id: emailJsTemplateId,
+        user_id: emailJsPublicKey,
+        template_params: templateParams
       })
-    })
-
-    logger.info('emailService', 'Respuesta de Edge Function', { 
-      status: response.status,
-      ok: response.ok
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      logger.error('emailService', 'Edge Function respondió con error', { 
-        status: response.status,
-        error: errorText 
-      })
-      throw new Error(`Edge Function error: ${response.status} - ${errorText}`)
+      const errorData = await response.json()
+      throw new Error(errorData.message || 'Error en EmailJS')
     }
 
-    const data = await response.json()
-
-    logger.info('emailService', `Email enviado via Edge Function super-task`, { 
+    logger.info('emailService', `Email enviado via EmailJS`, { 
       email: emailCliente, 
-      tipo: tipoEmail,
-      id: data?.id 
+      tipo: tipoEmail 
     })
 
     return { 
       success: true, 
-      id: data?.id,
       mensaje: 'Email enviado exitosamente'
     }
   } catch (error) {
-    logger.error('emailService', `Error enviando email via Edge Function`, { 
+    logger.error('emailService', `Error enviando email via EmailJS`, { 
       error: error.message, 
       email: emailCliente 
     })
@@ -90,18 +93,18 @@ async function enviarEmailViaEdgeFunction(emailCliente, nombreCliente, tipoEmail
  */
 export async function enviarFormularioEnriquecimiento(emailCliente, nombreCliente, tokenEnriquecimiento, origen) {
   try {
-    const resultado = await enviarEmailViaEdgeFunction(emailCliente, nombreCliente, 'enriquecimiento', {
+    const resultado = await enviarEmailViaEmailJS(emailCliente, nombreCliente, 'enriquecimiento', {
       tokenEnriquecimiento,
       origen
     })
 
     return resultado
   } catch (error) {
-    logger.warn('emailService', 'Edge Function falló, usando link manual', { error: error.message })
+    logger.warn('emailService', 'EmailJS falló, usando link manual', { error: error.message })
     return { 
       success: false, 
       modo: 'link_manual',
-      mensaje: `Edge Function falló: ${error.message}. Formulario disponible vía link manual.`,
+      mensaje: `Email no enviado automáticamente: ${error.message}. Formulario disponible vía link manual.`,
       linkManual: `${origen}/enriquecimiento/${tokenEnriquecimiento}`
     }
   }
@@ -136,7 +139,7 @@ export function validarTokenFormato(token) {
  */
 export async function enviarEmailPago(emailCliente, nombreCliente, tokenPago, origen, datosPago) {
   try {
-    const resultado = await enviarEmailViaEdgeFunction(emailCliente, nombreCliente, 'pago', {
+    const resultado = await enviarEmailViaEmailJS(emailCliente, nombreCliente, 'pago', {
       tokenPago,
       origen,
       ...datosPago
@@ -144,11 +147,11 @@ export async function enviarEmailPago(emailCliente, nombreCliente, tokenPago, or
 
     return resultado
   } catch (error) {
-    logger.warn('emailService', 'Edge Function falló para pago, usando link manual', { error: error.message })
+    logger.warn('emailService', 'EmailJS falló para pago, usando link manual', { error: error.message })
     return { 
       success: false, 
       modo: 'link_manual',
-      mensaje: `Edge Function falló: ${error.message}. Formulario disponible vía link manual.`,
+      mensaje: `Email no enviado automáticamente: ${error.message}. Formulario disponible vía link manual.`,
       linkManual: `${origen}/pago/${tokenPago}`
     }
   }
@@ -159,7 +162,7 @@ export async function enviarEmailPago(emailCliente, nombreCliente, tokenPago, or
  */
 export async function enviarRecordatorioEnriquecimiento(emailCliente, nombreCliente, tokenEnriquecimiento, origen) {
   try {
-    const resultado = await enviarEmailViaEdgeFunction(emailCliente, nombreCliente, 'enriquecimiento', {
+    const resultado = await enviarEmailViaEmailJS(emailCliente, nombreCliente, 'enriquecimiento', {
       tokenEnriquecimiento,
       origen,
       esRecordatorio: true
@@ -167,11 +170,11 @@ export async function enviarRecordatorioEnriquecimiento(emailCliente, nombreClie
 
     return resultado
   } catch (error) {
-    logger.warn('emailService', 'Edge Function falló para recordatorio, usando link manual', { error: error.message })
+    logger.warn('emailService', 'EmailJS falló para recordatorio, usando link manual', { error: error.message })
     return { 
       success: false, 
       modo: 'link_manual',
-      mensaje: `Edge Function falló: ${error.message}. Formulario disponible vía link manual.`,
+      mensaje: `Email no enviado automáticamente: ${error.message}. Formulario disponible vía link manual.`,
       linkManual: `${origen}/enriquecimiento/${tokenEnriquecimiento}`
     }
   }
