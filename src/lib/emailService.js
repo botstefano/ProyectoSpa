@@ -8,7 +8,7 @@ import { logger } from './logger'
 import { supabase, requireSupabase, isSupabaseConfigured } from './supabaseClient'
 
 /**
- * Envía email usando Edge Function de Supabase
+ * Envía email usando Edge Function de Supabase con llamada directa fetch
  * @param {string} emailCliente - Email del cliente
  * @param {string} nombreCliente - Nombre del cliente
  * @param {string} tipoEmail - Tipo de email ('enriquecimiento' o 'pago')
@@ -18,17 +18,53 @@ async function enviarEmailViaEdgeFunction(emailCliente, nombreCliente, tipoEmail
   try {
     const client = requireSupabase()
     
-    const { data, error } = await client.functions.invoke('send-email', {
-      body: {
+    // Obtener URL y headers de Supabase
+    const { data: { session } } = await client.auth.getSession()
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase URL o ANON_KEY no configuradas')
+    }
+
+    const functionUrl = `${supabaseUrl}/functions/v1/send-email`
+    
+    logger.info('emailService', 'Llamando a Edge Function', { 
+      url: functionUrl,
+      email: emailCliente,
+      tipo: tipoEmail
+    })
+
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
         emailCliente,
         nombreCliente,
         tipoEmail,
         datos
-      }
+      })
     })
 
-    if (error) throw error
+    logger.info('emailService', 'Respuesta de Edge Function', { 
+      status: response.status,
+      ok: response.ok
+    })
 
+    if (!response.ok) {
+      const errorText = await response.text()
+      logger.error('emailService', 'Edge Function respondió con error', { 
+        status: response.status,
+        error: errorText 
+      })
+      throw new Error(`Edge Function error: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    
     logger.info('emailService', `Email de ${tipoEmail} enviado exitosamente via Edge Function`, { 
       email: emailCliente, 
       id: data?.id 
@@ -40,7 +76,11 @@ async function enviarEmailViaEdgeFunction(emailCliente, nombreCliente, tipoEmail
       mensaje: 'Email enviado exitosamente'
     }
   } catch (error) {
-    logger.error('emailService', `Error enviando email de ${tipoEmail} via Edge Function`, { error, email: emailCliente })
+    logger.error('emailService', `Error enviando email de ${tipoEmail} via Edge Function`, { 
+      error: error.message, 
+      email: emailCliente,
+      stack: error.stack 
+    })
     return { 
       success: false, 
       error: error.message,
