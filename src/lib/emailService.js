@@ -18,17 +18,11 @@ async function enviarEmailViaEmailJS(emailCliente, nombreCliente, tipoEmail, dat
     const emailJsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
     const emailJsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
     
-    // Usar solo 2 templates: general (enriquecimiento + propuesta) y pago
-    let emailJsTemplateId
-    if (tipoEmail === 'pago') {
-      emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_PAGO
-    } else {
-      // enriquecimiento y propuesta usan el mismo template general
-      emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_GENERAL
-    }
+    // Usar un solo template universal para todos los tipos de email
+    const emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
     
     if (!emailJsServiceId || !emailJsTemplateId || !emailJsPublicKey) {
-      throw new Error('EmailJS no configurado. Configura las variables de entorno correspondientes en tu .env')
+      throw new Error('EmailJS no configurado. Configura VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID y VITE_EMAILJS_PUBLIC_KEY en tu .env')
     }
 
     // Preparar datos según tipo

@@ -11,9 +11,7 @@ services:
         sync: false
       - key: VITE_EMAILJS_SERVICE_ID
         sync: false
-      - key: VITE_EMAILJS_TEMPLATE_GENERAL
-        sync: false
-      - key: VITE_EMAILJS_TEMPLATE_PAGO
+      - key: VITE_EMAILJS_TEMPLATE_ID
         sync: false
       - key: VITE_EMAILJS_PUBLIC_KEY
         sync: false
