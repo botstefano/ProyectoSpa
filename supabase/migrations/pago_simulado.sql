@@ -46,6 +46,13 @@ CREATE INDEX IF NOT EXISTS idx_pago_simulado_expira ON pago_simulado(expira_en);
 ALTER TABLE pago_simulado ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de seguridad para pagos simulados
+-- Eliminar políticas existentes para evitar conflictos
+DROP POLICY IF EXISTS "pago_simulado_insert_authenticated" ON pago_simulado;
+DROP POLICY IF EXISTS "pago_simulado_select_authenticated" ON pago_simulado;
+DROP POLICY IF EXISTS "pago_simulado_update_authenticated" ON pago_simulado;
+DROP POLICY IF EXISTS "pago_simulado_update_anon" ON pago_simulado;
+DROP POLICY IF EXISTS "pago_simulado_select_anon_by_token" ON pago_simulado;
+
 -- Usuarios autenticados pueden insertar (staff)
 CREATE POLICY "pago_simulado_insert_authenticated" 
 ON pago_simulado FOR INSERT TO authenticated 

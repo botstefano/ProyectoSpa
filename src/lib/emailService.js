@@ -13,8 +13,8 @@ import { logger } from './logger'
  * @param {string} origen - URL base del sitio
  */
 export async function enviarFormularioEnriquecimiento(emailCliente, nombreCliente, tokenEnriquecimiento, origen) {
-  const resendApiKey = import.meta.env.RESEND_API_KEY
-  const resendFromEmail = import.meta.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+  const resendApiKey = import.meta.env.VITE_RESEND_API_KEY
+  const resendFromEmail = import.meta.env.VITE_RESEND_FROM_EMAIL || 'onboarding@resend.dev'
 
   if (!resendApiKey) {
     logger.warn('emailService', 'RESEND_API_KEY no configurada, modo simulación')
@@ -483,8 +483,8 @@ export async function enviarEmailPago(emailCliente, nombreCliente, tokenPago, or
  * Envía recordatorio de enriquecimiento
  */
 export async function enviarRecordatorioEnriquecimiento(emailCliente, nombreCliente, tokenEnriquecimiento, origen) {
-  const resendApiKey = import.meta.env.RESEND_API_KEY
-  const resendFromEmail = import.meta.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+  const resendApiKey = import.meta.env.VITE_RESEND_API_KEY
+  const resendFromEmail = import.meta.env.VITE_RESEND_FROM_EMAIL || 'onboarding@resend.dev'
 
   if (!resendApiKey) {
     return { 

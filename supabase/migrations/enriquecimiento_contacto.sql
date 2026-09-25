@@ -44,6 +44,14 @@ CREATE INDEX IF NOT EXISTS idx_enriquecimiento_completado ON enriquecimiento_con
 ALTER TABLE enriquecimiento_contacto ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de seguridad para enriquecimiento
+-- Eliminar políticas existentes para evitar conflictos
+DROP POLICY IF EXISTS "enriquecimiento_insert_anon" ON enriquecimiento_contacto;
+DROP POLICY IF EXISTS "enriquecimiento_select_anon_by_token" ON enriquecimiento_contacto;
+DROP POLICY IF EXISTS "enriquecimiento_update_anon" ON enriquecimiento_contacto;
+DROP POLICY IF EXISTS "enriquecimiento_insert_authenticated" ON enriquecimiento_contacto;
+DROP POLICY IF EXISTS "enriquecimiento_select_authenticated" ON enriquecimiento_contacto;
+DROP POLICY IF EXISTS "enriquecimiento_update_authenticated" ON enriquecimiento_contacto;
+
 -- Usuarios anónimos pueden insertar (para formulario público)
 CREATE POLICY "enriquecimiento_insert_anon" 
 ON enriquecimiento_contacto FOR INSERT TO anon 
