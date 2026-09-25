@@ -126,6 +126,18 @@ export async function notificarPagoConfirmado(idContacto, datosPago) {
   )
 }
 
+// CLIENTE → PAYERS: Cuando el cliente completa el pago simulado
+export async function notificarPagoClienteCompletado(idContacto, datosPago) {
+  return enviarNotificacion(
+    idContacto,
+    'payers',
+    'payers',
+    'pago_cliente_completado',
+    'El cliente ha completado el pago simulado. Revisar y confirmar.',
+    datosPago
+  )
+}
+
 // PAYER → LEAD: Cuando un pago es rechazado
 export async function notificarPagoRechazado(idContacto, motivo) {
   return enviarNotificacion(

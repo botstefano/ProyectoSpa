@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import BuyersLanding from './features/buyers/BuyersLanding'
 import LeadsStaffPage from './features/leads/LeadsStaffPage'
 import PayersStaffPage from './features/payers/PayersStaffPage'
+import PagoPublicoPage from './features/payers/PagoPublicoPage'
 import CustomersStaffPage from './features/customers/CustomersStaffPage'
 import EnriquecimientoPage from './features/enriquecimiento/EnriquecimientoPage'
 import PropuestaChatbotPage from './features/propuestas/PropuestaChatbotPage'
@@ -15,6 +16,7 @@ export default function App() {
       {/* Formularios públicos */}
       <Route path="/enriquecimiento/:token" element={<EnriquecimientoPage />} />
       <Route path="/propuesta/:token" element={<PropuestaChatbotPage />} />
+      <Route path="/pago/:token" element={<PagoPublicoPage />} />
 
       {/* Fases 2-4 — paneles internos (staff), no enlazados desde la landing */}
       <Route path="/staff/leads" element={<LeadsStaffPage />} />

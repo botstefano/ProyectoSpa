@@ -1125,6 +1125,26 @@ button {
   flex: 0 0 auto;
 }
 
+.payers-note.supabase-connected {
+  border-color: rgba(76, 175, 80, 0.3);
+  background: rgba(76, 175, 80, 0.08);
+  color: #2e7d32;
+}
+
+.payers-note.supabase-connected svg {
+  color: #4caf50;
+}
+
+.payers-note.demo-mode {
+  border-color: rgba(255, 152, 0, 0.3);
+  background: rgba(255, 152, 0, 0.08);
+  color: #e65100;
+}
+
+.payers-note.demo-mode svg {
+  color: #ff9800;
+}
+
 .payers-grid {
   display: grid;
   gap: 1rem;

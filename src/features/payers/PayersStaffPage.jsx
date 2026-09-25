@@ -6,6 +6,7 @@ import {
   obtenerDetallesPago,
   verificarPagoConfirmado
 } from './api/payersApi'
+import { enviarEmailPagoSimulado } from './api/pagoSimuladoApi'
 import { isSupabaseConfigured } from '../../lib/supabaseClient'
 
 const PAYMENT_METHODS = [
@@ -166,6 +167,7 @@ export default function PayersStaffPage() {
   const [loading, setLoading] = useState(true)
   const [source, setSource] = useState('demo')
   const [paymentDetails, setPaymentDetails] = useState(null)
+  const [sendingPaymentEmail, setSendingPaymentEmail] = useState(false)
 
   const confirmedTotal = useMemo(
     () => history.filter((item) => item.resultado === 'Confirmado').reduce((sum, item) => sum + item.monto, 0),
@@ -254,6 +256,51 @@ export default function PayersStaffPage() {
     window.setTimeout(() => setNotice(''), 4200)
   }
 
+  async function sendPaymentEmail() {
+    if (!selectedClient) {
+      showNotice('Selecciona un cliente primero.')
+      return
+    }
+
+    if (!selectedClient.email) {
+      showNotice('El cliente no tiene email registrado.')
+      return
+    }
+
+    try {
+      setSendingPaymentEmail(true)
+      
+      const datosPago = {
+        monto_total: service?.total || 0,
+        servicio_contratado: service?.nombre || 'Servicio general',
+        tipo_comprobante: 'boleta'
+      }
+
+      const result = await enviarEmailPagoSimulado(
+        selectedClient.id_contacto,
+        selectedClient.email,
+        selectedClient.nombre,
+        datosPago
+      )
+
+      if (result.success) {
+        const linkManual = result.data.linkManual || `${window.location.origin}/pago/${result.data.token}`
+        showNotice(
+          result.data.emailEnviado 
+            ? `✓ Email de pago enviado a ${selectedClient.email}. El cliente podrá completar el pago desde el enlace recibido.`
+            : `Pago creado. Link manual: ${linkManual} (email no enviado - revisar configuración RESEND)`
+        )
+      } else {
+        showNotice(`Error al enviar email: ${result.error?.message || 'Error desconocido'}`)
+      }
+    } catch (error) {
+      console.error('[Payers] Error enviando email de pago:', error)
+      showNotice(`Error al enviar email de pago: ${error.message}`)
+    } finally {
+      setSendingPaymentEmail(false)
+    }
+  }
+
   async function registerPayment() {
     if (!selectedClient) {
       showNotice('Selecciona un cliente primero.')
@@ -318,7 +365,9 @@ export default function PayersStaffPage() {
           setPaymentDetails(updatedDetails)
         }
         
-        showNotice('Pago confirmado. La reserva quedó habilitada y el servicio se activó correctamente.')
+        showNotice(source === 'supabase' 
+          ? '✓ Pago confirmado en base de datos. La reserva quedó habilitada y el servicio se activó correctamente.' 
+          : 'Pago confirmado. La reserva quedó habilitada y el servicio se activó correctamente.')
       } else if (transaction.resultado === 'Rechazado') {
         showNotice('Pago rechazado. El servicio permanece pendiente de activación.')
       } else {
@@ -333,15 +382,19 @@ export default function PayersStaffPage() {
   }
 
   function confirmService() {
-    showNotice('La contratación quedó formalizada. La constancia digital está lista para la demo.')
+    showNotice(source === 'supabase' 
+      ? 'La contratación quedó formalizada. La constancia digital está lista.' 
+      : 'La contratación quedó formalizada. La constancia digital está lista para la demo.')
   }
 
   function generateReceipt() {
     if (history.length === 0) {
-      showNotice('Primero registra un pago para generar su comprobante de demo.')
+      showNotice('Primero registra un pago para generar su comprobante.')
       return
     }
-    showNotice('Comprobante/constancia generado en modo demo.')
+    showNotice(source === 'supabase' 
+      ? 'Comprobante/constancia generado correctamente.' 
+      : 'Comprobante/constancia generado en modo demo.')
   }
 
   if (loading) {
@@ -349,7 +402,7 @@ export default function PayersStaffPage() {
       <div className="payers-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <div style={{ textAlign: 'center', color: 'white' }}>
           <h2>Cargando sistema de pagos...</h2>
-          <p>{source === 'supabase' ? 'Conectando a Supabase' : 'Modo demo'}</p>
+          <p>{source === 'supabase' ? 'Conectando a Supabase y cargando datos reales...' : 'Iniciando modo demo...'}</p>
         </div>
       </div>
     )
@@ -401,8 +454,8 @@ export default function PayersStaffPage() {
           <div className="payers-date-card">
             <Icon name="calendar" size={20} />
             <div>
-              <span>Fecha de la demo</span>
-              <strong>Miércoles, 17 de septiembre de 2026</strong>
+              <span>{source === 'supabase' ? 'Fecha actual' : 'Fecha de la demo'}</span>
+              <strong>{new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>
             </div>
           </div>
         </section>
@@ -415,9 +468,13 @@ export default function PayersStaffPage() {
           <Step number="5" label="Servicio activado" status={initialPaid ? 'done' : undefined} />
         </section>
 
-        <div className="payers-note">
-          <Icon name="info" size={18} />
-          <span>{source === 'supabase' ? 'Conectado a Supabase: datos reales del sistema' : 'Modo demo: el registro de pagos se mantiene en memoria'}</span>
+        <div className={`payers-note ${source === 'supabase' ? 'supabase-connected' : 'demo-mode'}`}>
+          <Icon name={source === 'supabase' ? 'check' : 'info'} size={18} />
+          <span>
+            {source === 'supabase' 
+              ? '✓ Conectado a Supabase: Operaciones reales en base de datos' 
+              : '⚠ Modo demo: Operaciones simuladas en memoria local'}
+          </span>
         </div>
 
         {clients.length === 0 && (
@@ -469,6 +526,19 @@ export default function PayersStaffPage() {
                   <Icon name="check" size={17} />
                   <span>Lead proveniente de Fase 2 con lead score ≥ 50, listo para proceso de pago.</span>
                 </div>
+
+                {selectedClient.email && (
+                  <button 
+                    className="primary-payment-button" 
+                    type="button" 
+                    onClick={sendPaymentEmail}
+                    disabled={sendingPaymentEmail}
+                    style={{ marginTop: '15px', width: '100%' }}
+                  >
+                    <Icon name="bell" size={17} />
+                    {sendingPaymentEmail ? 'Enviando email...' : '📧 Enviar email de pago al cliente'}
+                  </button>
+                )}
               </>
             ) : (
               <div className="client-proof">
@@ -746,7 +816,9 @@ export default function PayersStaffPage() {
               </button>
 
               <p className="secure-note">
-                En una implementación real, el medio digital se valida contra el proveedor de pagos. Esta versión académica simula la confirmación.
+                {source === 'supabase' 
+                  ? 'Registro de pago en base de datos. Validación del método de pago según configuración del negocio.' 
+                  : 'En una implementación real, el medio digital se valida contra el proveedor de pagos. Esta versión académica simula la confirmación.'}
               </p>
 
               {notice && <div className="payers-toast" role="status">{notice}</div>}
@@ -810,7 +882,9 @@ export default function PayersStaffPage() {
               </div>
 
               <div className="kpi-legend">
-                <span>Los valores se recalculan con la interacción de la demo.</span>
+                <span>{source === 'supabase' 
+                  ? 'Indicadores calculados con datos reales de la base de datos.' 
+                  : 'Los valores se recalculan con la interacción de la demo.'}</span>
                 <span>Menos pagos vencidos/rechazados = menor incidencia.</span>
               </div>
             </article>
