@@ -248,7 +248,7 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
 
   try {
     // Validar solicitud contra el catálogo antes de enviar a Mistral
-    const validacion = validarSolicitud({ mensaje }, currentProposal)
+    const validacion = validarSolicitud({ mensaje: message }, currentProposal)
     
     // Construir el contexto del sistema con el catálogo completo
     const systemPrompt = buildSystemPrompt(currentProposal)
