@@ -1,8 +1,15 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { corsHeaders } from 'https://esm.sh/@supabase/supabase-js@2/cors'
+
+// Headers CORS manuales y robustos
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
+}
 
 serve(async (req) => {
-  // Manejar preflight request con headers oficiales de Supabase
+  // Manejar preflight request
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -15,6 +22,9 @@ serve(async (req) => {
     })
   }
 
+  // Log para debugging
+  console.log('Edge Function invoked:', req.method, req.url)
+
   try {
     const body = await req.json()
     console.log('Request received:', body)
@@ -26,7 +36,7 @@ serve(async (req) => {
         JSON.stringify({ error: 'Faltan campos requeridos' }),
         { 
           status: 400,
-          headers: corsHeaders
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
@@ -40,7 +50,7 @@ serve(async (req) => {
         JSON.stringify({ error: 'RESEND_API_KEY no configurada en Edge Function' }),
         { 
           status: 500,
-          headers: corsHeaders
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
@@ -129,7 +139,7 @@ serve(async (req) => {
         JSON.stringify({ error: 'Tipo de email no válido' }),
         { 
           status: 400,
-          headers: corsHeaders
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
@@ -165,7 +175,7 @@ serve(async (req) => {
         mensaje: 'Email enviado exitosamente'
       }),
       { 
-        headers: corsHeaders
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
 
@@ -178,7 +188,7 @@ serve(async (req) => {
       }),
       { 
         status: 500,
-        headers: corsHeaders
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
   }

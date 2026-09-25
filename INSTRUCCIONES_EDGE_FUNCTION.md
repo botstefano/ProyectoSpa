@@ -22,13 +22,14 @@
    ```
    *(Reemplaza con tu API key real de Resend)*
 
-### Paso 2: Actualizar el código de la Edge Function
+### Paso 2: Actualizar el código de la Edge Function (CRÍTICO)
 
 1. En el editor de la Edge Function `send-email`, borra todo el código actual
-2. Copia el código de `supabase/functions/send-email/index.ts`
+2. Copia el código de `supabase/functions/send-email/index.ts` (versión actualizada con headers CORS manuales)
 3. Pégalo en el editor
 4. Haz clic en **Save**
 5. Haz clic en **Deploy**
+6. **IMPORTANTE:** Espera a que el despliegue termine (debería mostrar "Deployed successfully")
 
 ### Paso 3: Verificar el despliegue
 
