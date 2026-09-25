@@ -1,120 +1,163 @@
-# Instrucciones para Configurar Edge Function (Método Dashboard)
+# Instrucciones para Configurar Edge Function de Emails
 
-## 🚀 Método Rápido: Configuración Manual en Dashboard
+## 🎯 Problema Identificado
 
-Este método es más rápido y evita problemas de instalación del CLI.
+**Error CORS:** `Access to fetch at 'https://api.resend.com/emails' from origin 'https://origen-spa.onrender.com' has been blocked by CORS policy`
 
-### Paso 1: Acceder al Dashboard de Supabase
+**Causa Raíz:** La API de Resend **no permite llamadas directas desde el navegador** (frontend). Resend está diseñado para ser usado exclusivamente desde servidores (backend).
+
+**Solución Correcta:** Usar Edge Function de Supabase como intermediario. Las Edge Functions corren en el servidor de Supabase, por lo que no tienen restricciones CORS.
+
+## 🔧 Pasos para Configurar Edge Function
+
+### Paso 1: Configurar RESEND_API_KEY en Supabase
 
 1. Ve a [Supabase Dashboard](https://supabase.com/dashboard)
 2. Selecciona tu proyecto (origen-spa)
+3. Ve a **Edge Functions** (en el menú lateral)
+4. Haz clic en **send-email** (o crea una nueva función con ese nombre)
+5. En la sección **Environment Variables**, agrega:
+   ```
+   RESEND_API_KEY=re_xxxxxxxxxxxxxx
+   ```
+   *(Reemplaza con tu API key real de Resend)*
 
-### Paso 2: Crear la Edge Function
+### Paso 2: Actualizar el código de la Edge Function
 
-1. En el menú lateral, navega a **"Edge Functions"**
-2. Haz clic en **"New Edge Function"**
-3. Nombre de la función: `send-email`
-4. Haz clic en **"Create"**
-
-### Paso 3: Pegar el código de la función
-
-1. En el editor de código que aparece, borra el código de ejemplo
-2. Copia todo el contenido de este archivo:
-   `supabase/functions/send-email/index.ts`
+1. En el editor de la Edge Function `send-email`, borra todo el código actual
+2. Copia el código de `supabase/functions/send-email/index.ts`
 3. Pégalo en el editor
-4. Haz clic en **"Save"**
+4. Haz clic en **Save**
+5. Haz clic en **Deploy**
 
-### Paso 4: Configurar la Variable de Entorno
+### Paso 3: Verificar el despliegue
 
-1. En la página de la función `send-email`, haz clic en **"Settings"**
-2. Navega a **"Environment Variables"**
-3. Haz clic en **"New Variable"**
-4. Nombre: `RESEND_API_KEY`
-5. Valor: `re_Yz3AjW1G...` (tu key completa de Resend)
-6. Haz clic en **"Save"**
+1. Ve a la pestaña **Logs** de la Edge Function
+2. Debería ver logs indicando que la función está activa
+3. Si hay errores, revísalos en los logs
 
-### Paso 5: Desplegar la Función
+### Paso 4: Probar la Edge Function
 
-1. Haz clic en **"Deploy"** en la parte superior
-2. Espera a que el despliegue se complete (aprox. 1-2 minutos)
-3. Verás un mensaje de confirmación cuando esté listo
+Puedes probar la Edge Function directamente desde el navegador o con curl:
 
-### Paso 6: Verificar el Despliegue
+```bash
+curl -X POST 'https://TU-PROYECTO.supabase.co/functions/v1/send-email' \
+  -H 'Authorization: Bearer TU-ANON-KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "emailCliente": "test@example.com",
+    "nombreCliente": "Test User",
+    "tipoEmail": "enriquecimiento",
+    "datos": {
+      "tokenEnriquecimiento": "TEST-TOKEN",
+      "origen": "https://origen-spa.onrender.com"
+    }
+  }'
+```
 
-1. Ve a **"Logs"** en la página de la función
-2. Deberías ver logs indicando que la función está activa
-3. No debería haber errores de despliegue
+## 🎯 Cómo Funciona la Solución
 
-### Paso 7: Probar la Función
+### Antes (Fallaba):
+```
+Frontend (Render) → Resend API ❌
+(Error CORS: Resend no permite llamadas desde navegador)
+```
 
-1. En la página de la función, haz clic en **"Invoke"**
-2. Usa este payload de prueba:
+### Ahora (Funciona):
+```
+Frontend (Render) → Supabase Edge Function → Resend API ✅
+(Edge Function corre en servidor, sin restricciones CORS)
+```
 
-```json
-{
-  "emailCliente": "test@example.com",
-  "nombreCliente": "Cliente Test",
-  "tipoEmail": "enriquecimiento",
-  "datos": {
-    "tokenEnriquecimiento": "TEST-TOKEN-123",
-    "origen": "https://origen-spa.onrender.com"
+## 📋 Arquitectura Implementada
+
+### emailService.js (Frontend)
+```javascript
+// Llama a Edge Function de Supabase
+const { data, error } = await client.functions.invoke('send-email', {
+  body: {
+    emailCliente,
+    nombreCliente,
+    tipoEmail,
+    datos
   }
-}
+})
 ```
 
-3. Haz clic en **"Invoke"**
-4. Deberías recibir una respuesta exitosa:
-```json
-{
-  "success": true,
-  "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "mensaje": "Email enviado exitosamente"
-}
+### Edge Function (Servidor Supabase)
+```typescript
+// Recibe la petición del frontend
+// Llama a Resend API desde el servidor (sin CORS)
+// Retorna resultado al frontend
+const resendResponse = await fetch('https://api.resend.com/emails', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${resendApiKey}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ /* email data */ })
+})
 ```
 
-### Paso 8: Probar en tu Aplicación
+## 🔍 Troubleshooting
 
-1. Recarga tu aplicación: `https://origen-spa.onrender.com`
-2. Ve a `/staff/leads`
-3. Selecciona un lead con email
-4. Haz clic en "Enviar email de enriquecimiento"
-5. **Debería funcionar sin error CORS**
-6. Verifica tu email para confirmar que recibiste el mensaje
+### Si la Edge Function no funciona:
 
-## 🔍 Verificación Final
+1. **Verificar que esté desplegada:**
+   - Ve a Supabase Dashboard → Edge Functions
+   - Deberías ver `send-email` en la lista
+   - El estado debe ser "Active"
 
-En lugar del error CORS anterior:
-```
-Access to fetch at 'https://api.resend.com/emails' from origin 'https://origen-spa.onrender.com' 
-has been blocked by CORS policy
-```
+2. **Verificar la API Key de Resend:**
+   - Ve a Resend Dashboard → API Keys
+   - Copia la API key correcta
+   - Actualízala en Supabase Edge Function → Environment Variables
 
-Deberías ver en la consola:
-```json
-{
-  "success": true,
-  "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "mensaje": "Email enviado exitosamente"
-}
-```
+3. **Revisar logs de la Edge Function:**
+   - Ve a Supabase Dashboard → Edge Functions → send-email → Logs
+   - Busca errores específicos
+   - Los errores te dirán exactamente qué está fallando
 
-## 📊 Confirmación en Resend
+4. **Verificar permisos:**
+   - Ve a Supabase Dashboard → Edge Functions → send-email
+   - Asegúrate de que esté configurada para permitir llamadas anónimas
+   - O usa autenticación si es necesario
 
-1. Ve a [Resend Dashboard](https://resend.com/dashboard)
-2. Navega a **"Emails"**
-3. Deberías ver el email enviado con estado "delivered"
+### Errores Comunes:
 
-## ⚠️ Si hay problemas
+**Error: "RESEND_API_KEY no configurada"**
+- Solución: Agrega la API key en Environment Variables de la Edge Function
 
-1. **Verifica los logs** en Supabase Dashboard → Edge Functions → send-email → Logs
-2. **Verifica la API key** esté configurada correctamente
-3. **Verifica el código** esté completo en la función
-4. **Intenta redeployar** la función
+**Error: "Function not found"**
+- Solución: Verifica que la Edge Function esté desplegada con el nombre exacto `send-email`
 
-## 🎯 Ventajas de este método
+**Error: "Permission denied"**
+- Solución: Verifica los permisos de la Edge Function en Supabase
 
-- ✅ Más rápido (sin instalación de CLI)
-- ✅ Interfaz visual intuitiva
-- ✅ Logs en tiempo real
-- ✅ Fácil de debugging
-- ✅ No requiere configuración adicional
+## � Después de la Configuración
+
+1. **Probar desde el frontend:**
+   - Ve a `https://origen-spa.onrender.com/staff/leads`
+   - Intenta enviar un email de enriquecimiento
+   - Debería funcionar sin errores CORS
+
+2. **Verificar el email:**
+   - Revisa la bandeja de entrada del email de prueba
+   - Deberías recibir el email con el link del formulario
+
+3. **Monitorear logs:**
+   - Ve a Supabase Dashboard → Edge Functions → send-email → Logs
+   - Verifica que los emails se estén enviando correctamente
+
+## 📞 Soporte
+
+Si tienes problemas:
+- **Documentación Supabase Edge Functions**: https://supabase.com/docs/guides/functions
+- **Documentación Resend**: https://resend.com/docs/api-reference/emails/send-email
+- **Logs de Edge Function**: Siempre revisa los logs primero para diagnósticos
+
+---
+
+**Estado actual:** emailService.js actualizado para usar Edge Function. 
+**Próximo paso:** Configurar Edge Function en Supabase con RESEND_API_KEY.
+**Tiempo estimado:** 10-15 minutos para configuración completa.
