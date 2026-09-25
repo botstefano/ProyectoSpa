@@ -3,7 +3,7 @@ import { enviarFormularioEnriquecimiento } from '../../../lib/emailService'
 import { sendMessageToMistral, applyProposalChanges, generarTokenPropuesta, validarTokenPropuesta } from '../../../lib/mistralService'
 import { handleSupabaseError, createResponse } from '../../../lib/errorHandler'
 import { logger } from '../../../lib/logger'
-import { aceptarPropuesta } from '../leads/api/leadsApi'
+import { aceptarPropuesta } from '../../leads/api/leadsApi'
 
 /**
  * Genera una propuesta interactiva con chatbot para un contacto
