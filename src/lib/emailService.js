@@ -16,11 +16,22 @@ import { logger } from './logger'
 async function enviarEmailViaEmailJS(emailCliente, nombreCliente, tipoEmail, datos) {
   try {
     const emailJsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
-    const emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
     const emailJsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
     
+    // Seleccionar el template ID según el tipo de email
+    let emailJsTemplateId
+    if (tipoEmail === 'enriquecimiento') {
+      emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE EnriqueCIMIENTO
+    } else if (tipoEmail === 'propuesta') {
+      emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_PROPUESTA
+    } else if (tipoEmail === 'pago') {
+      emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_PAGO
+    } else {
+      emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID // fallback
+    }
+    
     if (!emailJsServiceId || !emailJsTemplateId || !emailJsPublicKey) {
-      throw new Error('EmailJS no configurado. Configura VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID y VITE_EMAILJS_PUBLIC_KEY en tu .env')
+      throw new Error('EmailJS no configurado. Configura las variables de entorno correspondientes en tu .env')
     }
 
     // Preparar datos según tipo
