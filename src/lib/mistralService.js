@@ -242,7 +242,7 @@ function validarSolicitud(solicitud, propuestaActual) {
  */
 export async function sendMessageToMistral(message, conversationHistory = [], currentProposal = {}, apiKey) {
   if (!apiKey) {
-    logger.warn('mistralService', 'MISTRAL_API_KEY no configurada, modo simulación')
+    logger.warn('mistralService', 'MISTRAL_API_KEY no configurada, usando modo simulación')
     return simulateMistralResponse(message, currentProposal)
   }
 
@@ -260,6 +260,11 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       { role: 'user', content: message }
     ]
 
+    logger.info('mistralService', 'Enviando solicitud a Mistral AI', { 
+      messageLength: message.length,
+      hasConversationHistory: conversationHistory.length > 0
+    })
+
     // Llamada a la API de Mistral
     const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
@@ -276,11 +281,22 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
     })
 
     if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.message || 'Error en API de Mistral')
+      const errorData = await response.json().catch(() => ({ message: 'Error desconocido en API de Mistral' }))
+      const errorMessage = errorData.message || errorData.error?.message || 'Error en API de Mistral'
+      logger.error('mistralService', 'Error en respuesta de Mistral', { 
+        status: response.status,
+        statusText: response.statusText,
+        errorData: errorData 
+      })
+      throw new Error(`Mistral API (${response.status}): ${errorMessage}`)
     }
 
     const result = await response.json()
+    
+    if (!result.choices || !result.choices[0] || !result.choices[0].message) {
+      throw new Error('Respuesta de Mistral no tiene el formato esperado')
+    }
+
     const aiMessage = result.choices[0].message.content
 
     logger.info('mistralService', 'Mensaje enviado a Mistral exitosamente', { 
@@ -300,13 +316,14 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       rawResponse: result
     }
   } catch (error) {
-    logger.error('mistralService', 'Error comunicando con Mistral', { error })
-    return {
-      success: false,
+    logger.error('mistralService', 'Error comunicando con Mistral', { 
       error: error.message,
-      message: getFallbackResponse(message, currentProposal),
-      proposalChanges: null
-    }
+      stack: error.stack 
+    })
+    
+    // Usar modo simulación como fallback
+    logger.warn('mistralService', 'Usando modo simulación como fallback')
+    return simulateMistralResponse(message, currentProposal)
   }
 }
 
