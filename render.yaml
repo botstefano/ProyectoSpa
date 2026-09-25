@@ -11,9 +11,7 @@ services:
         sync: false
       - key: VITE_EMAILJS_SERVICE_ID
         sync: false
-      - key: VITE_EMAILJS_TEMPLATE_ENRIQUECIMIENTO
-        sync: false
-      - key: VITE_EMAILJS_TEMPLATE_PROPUESTA
+      - key: VITE_EMAILJS_TEMPLATE_GENERAL
         sync: false
       - key: VITE_EMAILJS_TEMPLATE_PAGO
         sync: false

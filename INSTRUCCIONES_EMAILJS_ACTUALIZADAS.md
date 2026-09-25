@@ -1,39 +1,28 @@
-# Instrucciones para Configurar EmailJS (Actualizado)
+# Instrucciones para Configurar EmailJS (Versión Simplificada)
 
-El sistema ahora usa **3 templates diferentes** de EmailJS, uno para cada tipo de email:
-- Enriquecimiento de datos
-- Propuestas personalizadas
-- Pagos
+El sistema usa **2 templates** de EmailJS (limitación del plan gratuito):
+- Template General (para enriquecimiento y propuesta)
+- Template Pago
 
 ## 1. Configurar Templates en EmailJS
 
-### Template de Enriquecimiento
-- **Nombre:** Template Enriquecimiento
-- **Subject:** Completa tu perfil - Origen Spa & Bienestar
+### Template General (para enriquecimiento y propuesta)
+- **Nombre:** Template General
+- **Subject:** Origen Spa & Bienestar - Información importante
 - **To Email:** `{{to_email}}`
 - **Content:**
 ```
 Hola {{to_name}},
 
-Gracias por tu interés en Origen Spa & Bienestar. Para ofrecerte una experiencia personalizada y adaptada a tus necesidades, necesitamos algunos datos adicionales.
+{{link_enriquecimiento}}
+
+Gracias por tu interés en Origen Spa & Bienestar. Para ofrecerte una experiencia personalizada, necesitamos algunos datos adicionales.
 
 Completa tu perfil aquí: {{link_enriquecimiento}}
 
 Este enlace expira en 7 días.
 
-El formulario tarda menos de 3 minutos en completarse. Si tienes alguna pregunta, no dudes en contactarnos.
-
-© 2026 Origen Spa & Bienestar
-```
-- **Variables:** `{{to_email}}`, `{{to_name}}`, `{{link_enriquecimiento}}`
-
-### Template de Propuesta
-- **Nombre:** Template Propuesta
-- **Subject:** Tu propuesta personalizada - Origen Spa & Bienestar
-- **To Email:** `{{to_email}}`
-- **Content:**
-```
-Hola {{to_name}},
+{{link_propuesta}}
 
 Tenemos una propuesta personalizada para ti basada en tu interés en {{servicio}}.
 
@@ -41,7 +30,7 @@ Precio: {{precio}}
 
 Revisa y negocia tu propuesta aquí: {{link_propuesta}}
 
-Este enlace te permite interactuar con nuestro asistente virtual para personalizar tu propuesta según tus necesidades y presupuesto.
+Este enlace te permite interactuar con nuestro asistente virtual para personalizar tu propuesta.
 
 El enlace expira en 7 días.
 
@@ -49,7 +38,7 @@ Si tienes alguna pregunta, no dudes en contactarnos.
 
 © 2026 Origen Spa & Bienestar
 ```
-- **Variables:** `{{to_email}}`, `{{to_name}}`, `{{link_propuesta}}`, `{{servicio}}`, `{{precio}}`
+- **Variables:** `{{to_email}}`, `{{to_name}}`, `{{link_enriquecimiento}}`, `{{link_propuesta}}`, `{{servicio}}`, `{{precio}}`
 
 ### Template de Pago
 - **Nombre:** Template Pago
@@ -75,9 +64,8 @@ Si tienes alguna pregunta sobre el pago, no dudes en contactarnos.
 
 ## 2. Obtener los Template IDs
 
-Después de crear los 3 templates en EmailJS, copia cada Template ID:
-- Template Enriquecimiento: `template_xxxxxxxxx`
-- Template Propuesta: `template_yl4e0ep` (ya lo tienes)
+Después de crear los 2 templates en EmailJS, copia cada Template ID:
+- Template General: `template_xxxxxxxxx`
 - Template Pago: `template_xxxxxxxxx`
 
 ## 3. Configurar Variables de Entorno
@@ -85,14 +73,13 @@ Después de crear los 3 templates en EmailJS, copia cada Template ID:
 ### En tu `.env` local:
 ```env
 VITE_EMAILJS_SERVICE_ID=service_cenvarb
-VITE_EMAILJS_TEMPLATE_ENRIQUECIMIENTO=template_xxxxxxxxx  # template de enriquecimiento
-VITE_EMAILJS_TEMPLATE_PROPUESTA=template_yl4e0ep         # template de propuesta (ya lo tienes)
-VITE_EMAILJS_TEMPLATE_PAGO=template_xxxxxxxxx            # template de pago
+VITE_EMAILJS_TEMPLATE_GENERAL=template_xxxxxxxxx  # template general (enriquecimiento + propuesta)
+VITE_EMAILJS_TEMPLATE_PAGO=template_xxxxxxxxx     # template de pago
 VITE_EMAILJS_PUBLIC_KEY=FMWx0QaWavNw660Ax
 ```
 
 ### En Render Dashboard:
-Ve a tu proyecto en Render → Environment Variables y agrega las mismas 5 variables.
+Ve a tu proyecto en Render → Environment Variables y agrega las mismas 4 variables.
 
 ## 4. Probar el Sistema
 
