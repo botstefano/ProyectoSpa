@@ -2,7 +2,7 @@
 import { obtenerLeads, calificarLead, aceptarPropuesta, actualizarLead, calificarLeadAutomatico } from "./api/leadsApi";
 import { obtenerNotificacionesPendientes, marcarNotificacionLeida } from "../../lib/notificaciones";
 import { enviarEmailEnriquecimiento, tieneEnriquecimientoCompletado } from "../enriquecimiento/api/enriquecimientoApi";
-import { enviarEmailPropuesta } from "../propuestas/api/propuestasApi";
+import { enviarEmailPropuestaConChatbot } from "../propuestas/api/propuestasApi";
 import { logger } from "../../lib/logger";
 
 const TABS = ["Perfil", "Propuesta", "Historial", "Notas", "Actividades"];
@@ -402,7 +402,7 @@ export default function LeadsStaffPage() {
         incluye: lead.propuesta?.incluye || 'Evaluación inicial, tratamiento y seguimiento'
       };
 
-      const result = await enviarEmailPropuesta(lead.id, emailCliente, nombreCliente, datosPropuesta);
+      const result = await enviarEmailPropuestaConChatbot(lead.id, emailCliente, nombreCliente, datosPropuesta);
       
       if (result.success) {
         if (result.data.emailEnviado) {

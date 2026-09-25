@@ -67,7 +67,7 @@ export async function generarPropuestaChatbot(idContacto, datosPropuestaInicial)
 /**
  * Envía email de propuesta con chatbot a un contacto
  */
-export async function enviarEmailPropuesta(idContacto, emailCliente, nombreCliente, datosPropuesta) {
+export async function enviarEmailPropuestaConChatbot(idContacto, emailCliente, nombreCliente, datosPropuesta) {
   try {
     // Primero generar la propuesta chatbot
     const formResult = await generarPropuestaChatbot(idContacto, datosPropuesta)
