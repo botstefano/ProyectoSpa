@@ -1,5 +1,5 @@
 import { supabase, requireSupabase, safeSupabaseOperation } from '../../../lib/supabaseClient'
-import { enviarFormularioEnriquecimiento } from '../../../lib/emailService'
+import { enviarEmailPropuesta } from '../../../lib/emailService'
 import { sendMessageToMistral, applyProposalChanges, generarTokenPropuesta, validarTokenPropuesta } from '../../../lib/mistralService'
 import { handleSupabaseError, createResponse } from '../../../lib/errorHandler'
 import { logger } from '../../../lib/logger'
@@ -79,12 +79,13 @@ export async function enviarEmailPropuesta(idContacto, emailCliente, nombreClien
     const token = formResult.data.token
     const origen = window.location.origin
 
-    // Reutilizar el servicio de email para enviar la propuesta
-    const emailResult = await enviarFormularioEnriquecimiento(
+    // Enviar email usando el servicio específico para propuestas
+    const emailResult = await enviarEmailPropuesta(
       emailCliente,
       nombreCliente,
       token,
-      origen
+      origen,
+      datosPropuesta
     )
 
     if (!emailResult.success) {

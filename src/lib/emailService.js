@@ -33,6 +33,14 @@ async function enviarEmailViaEmailJS(emailCliente, nombreCliente, tipoEmail, dat
       const tokenEnriquecimiento = datos?.tokenEnriquecimiento
       const origen = datos?.origen || 'https://origen-spa.onrender.com'
       templateParams.link_enriquecimiento = `${origen}/enriquecimiento/${tokenEnriquecimiento}`
+    } else if (tipoEmail === 'propuesta') {
+      const tokenPropuesta = datos?.tokenPropuesta
+      const origenPropuesta = datos?.origen || 'https://origen-spa.onrender.com'
+      const servicio = datos?.servicio || 'Servicio'
+      const precio = datos?.precio || 'Consultar'
+      templateParams.link_propuesta = `${origenPropuesta}/propuesta/${tokenPropuesta}`
+      templateParams.servicio = servicio
+      templateParams.precio = precio
     } else if (tipoEmail === 'pago') {
       const tokenPago = datos?.tokenPago
       const origenPago = datos?.origen || 'https://origen-spa.onrender.com'
@@ -130,6 +138,34 @@ export function validarTokenFormato(token) {
 }
 
 /**
+ * Envía email de propuesta a un cliente
+ * @param {string} emailCliente - Email del cliente
+ * @param {string} nombreCliente - Nombre del cliente
+ * @param {string} tokenPropuesta - Token único para la propuesta
+ * @param {string} origen - URL base del sitio
+ * @param {object} datosPropuesta - Datos de la propuesta (servicio, precio, etc.)
+ */
+export async function enviarEmailPropuesta(emailCliente, nombreCliente, tokenPropuesta, origen, datosPropuesta) {
+  try {
+    const resultado = await enviarEmailViaEmailJS(emailCliente, nombreCliente, 'propuesta', {
+      tokenPropuesta,
+      origen,
+      ...datosPropuesta
+    })
+
+    return resultado
+  } catch (error) {
+    logger.warn('emailService', 'EmailJS falló para propuesta, usando link manual', { error: error.message })
+    return { 
+      success: false, 
+      modo: 'link_manual',
+      mensaje: `Email no enviado automáticamente: ${error.message}. Formulario disponible vía link manual.`,
+      linkManual: `${origen}/propuesta/${tokenPropuesta}`
+    }
+  }
+}
+
+/**
  * Envía email de pago a un cliente
  * @param {string} emailCliente - Email del cliente
  * @param {string} nombreCliente - Nombre del cliente
@@ -185,5 +221,6 @@ export default {
   generarTokenEnriquecimiento,
   validarTokenFormato,
   enviarRecordatorioEnriquecimiento,
+  enviarEmailPropuesta,
   enviarEmailPago
 }
