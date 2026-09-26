@@ -6,7 +6,7 @@ import { logger } from '../../../lib/logger'
 
 /**
  * Obtiene leads que ya fueron calificados y están listos para pasar a PAYERS
- * Filtra por estado 'lead', lead_score >= umbral y propuesta_aceptada = true
+ * Filtra por estado 'lead' (o buyer con propuesta), lead_score >= umbral y propuesta_aceptada = true
  */
 export async function obtenerLeadsParaPago() {
   return safeSupabaseOperation(async (client) => {
@@ -19,7 +19,7 @@ export async function obtenerLeadsParaPago() {
           telefono,
           email,
           fecha_registro,
-          estado_contacto!inner(nombre_estado),
+          estado_contacto (nombre_estado),
           lead_detalle (
             lead_score,
             fecha_calificacion,
@@ -27,21 +27,38 @@ export async function obtenerLeadsParaPago() {
             fecha_aceptacion,
             datos_propuesta
           ),
+          propuesta_chatbot (
+            id_propuesta,
+            estado_propuesta,
+            propuesta_actual,
+            fecha_aceptacion
+          ),
           descarga (
             interes
           )
         `)
-        .eq('estado_contacto.nombre_estado', 'lead')
         .order('fecha_registro', { ascending: false })
 
       if (error) throw handleSupabaseError(error, 'obtener leads para pago')
 
       // Filtrar solo leads con score suficiente Y propuesta aceptada
-      const filtrados = data.filter(lead => {
-        const score = lead.lead_detalle?.[0]?.lead_score || 0
-        const propuestaAceptada = lead.lead_detalle?.[0]?.propuesta_aceptada || false
-        
-        return score >= 50 && propuestaAceptada
+      const filtrados = (data || []).filter(lead => {
+        // En Supabase, lead_detalle puede ser un objeto (relación 1 a 1) o un array
+        const det = Array.isArray(lead.lead_detalle) ? lead.lead_detalle[0] : lead.lead_detalle
+        const chatProp = Array.isArray(lead.propuesta_chatbot)
+          ? lead.propuesta_chatbot
+          : [lead.propuesta_chatbot].filter(Boolean)
+        const tieneChatbotAceptada = chatProp.some(p => p?.estado_propuesta === 'aceptada')
+
+        const score = det?.lead_score ?? (tieneChatbotAceptada ? 50 : 0)
+        const propuestaAceptada = det?.propuesta_aceptada || tieneChatbotAceptada || false
+
+        // Estado del contacto: admitir 'lead' o 'buyer' que ya aceptó propuesta
+        const estadoObj = Array.isArray(lead.estado_contacto) ? lead.estado_contacto[0] : lead.estado_contacto
+        const estadoNombre = estadoObj?.nombre_estado || ''
+        const estadoValido = estadoNombre === 'lead' || (estadoNombre === 'buyer' && propuestaAceptada)
+
+        return estadoValido && score >= 50 && propuestaAceptada
       })
 
       logger.info('payersApi', `Leads para pago obtenidos: ${filtrados.length}`)
@@ -105,11 +122,13 @@ export async function registrarPago(idContacto, pago) {
       pago.monto_total = amountValidation.cleanAmount
     }
 
+    const estadoPagoNormalizado = pago.estado_pago || pago.estado || 'pendiente'
+
     const { data, error } = await client
       .from('pago_detalle')
       .upsert({
         id_contacto: idContacto,
-        estado_pago: pago.estado || 'pendiente',
+        estado_pago: estadoPagoNormalizado,
         fecha_pago: pago.fecha_pago || new Date().toISOString(),
         servicio_contratado: pago.servicio_contratado || 'Servicio general',
         monto_total: pago.monto_total || 0,
@@ -187,11 +206,12 @@ export async function procesarPagoCompleto(idContacto, datosPago) {
     await registrarPago(idContacto, datosPago)
 
     // Si el pago está confirmado, transicionar a PAYER
-    if (datosPago.estado === 'confirmado' || datosPago.estado === 'pagado') {
+    const estado = (datosPago.estado_pago || datosPago.estado || '').toLowerCase()
+    if (estado === 'confirmado' || estado === 'pagado' || estado === 'pago confirmado') {
       await transicionarLeadAPayer(idContacto)
       // Enviar notificación a CUSTOMERS
       await notificarPagoConfirmado(idContacto, datosPago)
-    } else if (datosPago.estado === 'rechazado') {
+    } else if (estado === 'rechazado') {
       // Enviar notificación a LEADS para seguimiento
       await notificarPagoRechazado(idContacto, datosPago.motivo || 'Motivo no especificado')
     }

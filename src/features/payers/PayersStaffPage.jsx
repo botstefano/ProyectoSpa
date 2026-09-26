@@ -152,6 +152,44 @@ function MethodIcon({ name }) {
   )
 }
 
+function extractServiceFromLead(lead) {
+  if (!lead) return null
+  const det = Array.isArray(lead.lead_detalle) ? lead.lead_detalle[0] : lead.lead_detalle
+  const chatProp = Array.isArray(lead.propuesta_chatbot)
+    ? lead.propuesta_chatbot.find(p => p.estado_propuesta === 'aceptada')?.propuesta_actual
+    : lead.propuesta_chatbot?.estado_propuesta === 'aceptada'
+      ? lead.propuesta_chatbot?.propuesta_actual
+      : null
+
+  const prop = det?.datos_propuesta || chatProp || {}
+  const desc = Array.isArray(lead.descarga) ? lead.descarga[0] : lead.descarga
+
+  const parseNumber = (val, def) => {
+    if (typeof val === 'number') return val
+    if (!val) return def
+    const cleaned = String(val).replace(/[^0-9.]/g, '')
+    const num = parseFloat(cleaned)
+    return isNaN(num) ? def : num
+  }
+
+  const precioTotal = parseNumber(prop.precio, parseNumber(prop.precioEspecial, 120))
+  const precioReg = parseNumber(prop.precioRegular, precioTotal >= 120 ? precioTotal + 30 : 150)
+  const descuentoMonto = Math.max(0, precioReg - precioTotal)
+
+  const nombreServicio = prop.servicio || prop.nombre || desc?.interes || 'Servicio Spa'
+  const nombreCapitalizado = nombreServicio.charAt(0).toUpperCase() + nombreServicio.slice(1)
+
+  return {
+    nombre: nombreCapitalizado,
+    categoria: 'Wellness',
+    duracion: prop.duracion || '60 minutos',
+    fechaAtencion: new Date().toLocaleDateString('es-ES'),
+    precioRegular: precioReg,
+    descuento: descuentoMonto,
+    total: precioTotal,
+  }
+}
+
 export default function PayersStaffPage() {
   const [clients, setClients] = useState([])
   const [selectedClient, setSelectedClient] = useState(null)
@@ -186,6 +224,50 @@ export default function PayersStaffPage() {
   const rejectedRate =
     history.length === 0 ? 4 : Math.round((history.filter((item) => item.resultado === 'Rechazado').length / history.length) * 100)
 
+  // Seleccionar cliente y cargar sus datos de propuesta y cronograma
+  async function selectClient(lead) {
+    if (!lead) return
+    setSelectedClient(lead)
+
+    const clientService = extractServiceFromLead(lead)
+    setService(clientService)
+    setAmount(String(Math.round((clientService.total / 3) * 100) / 100))
+
+    try {
+      const cronograma = await crearCronogramaPagos(lead.id_contacto, clientService.nombre, clientService.total, 3)
+      setSchedule(cronograma.map((item, index) => ({
+        id: index + 1,
+        concepto: item.concepto,
+        monto: item.monto,
+        vencimiento: new Date(item.fecha_vencimiento).toLocaleDateString('es-ES'),
+        estado: item.estado === 'pendiente' ? 'Pendiente' : item.estado
+      })))
+
+      const detalles = await obtenerDetallesPago(lead.id_contacto)
+      if (detalles) {
+        setPaymentDetails(detalles)
+        setSource('supabase')
+        if (detalles.fecha_pago) {
+          setHistory([{
+            id: detalles.id_contacto || Date.now(),
+            fecha: new Date(detalles.fecha_pago).toLocaleDateString('es-ES'),
+            metodo: detalles.metodo_pago || 'Confirmado',
+            monto: Number(detalles.monto_total) || clientService.total,
+            resultado: (detalles.estado_pago || '').toLowerCase() === 'confirmado' ? 'Confirmado' : 'Pendiente',
+            referencia: 'Pago registrado en Supabase'
+          }])
+        } else {
+          setHistory([])
+        }
+      } else {
+        setPaymentDetails(null)
+        setHistory([])
+      }
+    } catch (e) {
+      console.error('[Payers] Error cargando detalles del cliente:', e)
+    }
+  }
+
   // Cargar clientes desde Supabase
   useEffect(() => {
     async function loadClients() {
@@ -197,41 +279,15 @@ export default function PayersStaffPage() {
         
         if (leads.length > 0) {
           setClients(leads)
-          setSelectedClient(leads[0])
-          
-          // Configurar servicio por defecto basado en el lead
-          const defaultService = {
-            nombre: leads[0].descarga?.[0]?.interes || 'Servicio general',
-            categoria: 'General',
-            duracion: '60 minutos',
-            fechaAtencion: new Date().toLocaleDateString('es-ES'),
-            precioRegular: 150,
-            descuento: 20,
-            total: 130,
-          }
-          setService(defaultService)
-          setAmount(String(defaultService.total / 3))
-          
-          // Crear cronograma inicial
-          const cronograma = await crearCronogramaPagos(leads[0].id_contacto, defaultService.nombre, defaultService.total, 3)
-          setSchedule(cronograma.map((item, index) => ({
-            id: index + 1,
-            concepto: item.concepto,
-            monto: item.monto,
-            vencimiento: new Date(item.fecha_vencimiento).toLocaleDateString('es-ES'),
-            estado: item.estado === 'pendiente' ? 'Pendiente' : item.estado
-          })))
-          
-          // Obtener detalles de pago existentes
-          const detalles = await obtenerDetallesPago(leads[0].id_contacto)
-          if (detalles) {
-            setPaymentDetails(detalles)
-            setSource('supabase')
-          }
-          
+          setSource('supabase')
+          await selectClient(leads[0])
           console.log('[Payers] Cliente cargado exitosamente:', leads[0].nombre)
         } else {
           console.log('[Payers] No hay leads que cumplan con los requisitos')
+          setClients([])
+          setSelectedClient(null)
+          setService(null)
+          setSchedule([])
           setSource('demo')
         }
       } catch (error) {
@@ -501,6 +557,54 @@ export default function PayersStaffPage() {
               </button>
             </div>
 
+            {clients.length > 0 && (
+              <div style={{ marginBottom: '14px', marginTop: '4px' }}>
+                <span style={{ display: 'block', fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' }}>
+                  Leads con propuesta aceptada ({clients.length}):
+                </span>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {clients
+                    .filter(c => {
+                      if (!search.trim()) return true
+                      const q = search.toLowerCase()
+                      return (
+                        c.nombre?.toLowerCase().includes(q) ||
+                        c.telefono?.includes(q) ||
+                        c.email?.toLowerCase().includes(q) ||
+                        String(c.id_contacto).includes(q)
+                      )
+                    })
+                    .map(c => {
+                      const isSelected = selectedClient?.id_contacto === c.id_contacto
+                      const cDet = Array.isArray(c.lead_detalle) ? c.lead_detalle[0] : c.lead_detalle
+                      return (
+                        <button
+                          key={c.id_contacto}
+                          type="button"
+                          onClick={() => selectClient(c)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: isSelected ? '2px solid #b7d2b9' : '1px solid rgba(255,255,255,0.15)',
+                            background: isSelected ? 'rgba(183, 210, 185, 0.22)' : 'rgba(255,255,255,0.06)',
+                            color: isSelected ? '#b7d2b9' : '#fff',
+                            cursor: 'pointer',
+                            fontWeight: isSelected ? '600' : '400',
+                            fontSize: '12.5px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <span>{c.nombre}</span>
+                          <span style={{ opacity: 0.7, fontSize: '11px' }}>({cDet?.lead_score || 50} pts)</span>
+                        </button>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
+
             {selectedClient ? (
               <>
                 <div className="client-profile">
@@ -513,18 +617,21 @@ export default function PayersStaffPage() {
                       <span><strong>ID Contacto:</strong> {selectedClient.id_contacto}</span>
                       <span><strong>Teléfono:</strong> {selectedClient.telefono || 'No provisto'}</span>
                       <span><strong>Email:</strong> {selectedClient.email || 'No provisto'}</span>
-                      <span><strong>Lead Score:</strong> {selectedClient.lead_detalle?.[0]?.lead_score || 'N/A'}</span>
+                      <span><strong>Lead Score:</strong> {(() => {
+                        const det = Array.isArray(selectedClient.lead_detalle) ? selectedClient.lead_detalle[0] : selectedClient.lead_detalle
+                        return det?.lead_score ?? 'N/A'
+                      })()}</span>
                     </div>
                     <div className="phase-status">
                       <span>Estado Fase 2:</span>
-                      <b>Lead calificado</b>
+                      <b>Lead calificado con propuesta</b>
                     </div>
                   </div>
                 </div>
 
                 <div className="client-proof">
                   <Icon name="check" size={17} />
-                  <span>Lead proveniente de Fase 2 con lead score ≥ 50, listo para proceso de pago.</span>
+                  <span>Lead proveniente de Fase 2 con propuesta aceptada, listo para proceso de pago.</span>
                 </div>
 
                 {selectedClient.email && (
