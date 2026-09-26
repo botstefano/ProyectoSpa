@@ -78,7 +78,7 @@ async function transicionarBuyerALead(idContacto) {
     logger.info('leadsApi', `Contacto ${idContacto} transicionado a LEAD`)
     
     // Registrar auditoría de la transición
-    await registrarTransicionFase(idContacto, 'buyer', 'lead', { score })
+    await registrarTransicionFase(idContacto, 'buyer', 'lead', {})
   } catch (error) {
     logger.error('leadsApi', 'Error en transición BUYER → LEAD', { idContacto, error })
     throw error
