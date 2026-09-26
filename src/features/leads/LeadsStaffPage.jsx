@@ -1,9 +1,10 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { obtenerLeads, calificarLead, aceptarPropuesta, actualizarLead, calificarLeadAutomatico } from "./api/leadsApi";
 import { obtenerNotificacionesPendientes, marcarNotificacionLeida } from "../../lib/notificaciones";
 import { enviarEmailEnriquecimiento, tieneEnriquecimientoCompletado } from "../enriquecimiento/api/enriquecimientoApi";
 import { enviarEmailPropuestaConChatbot } from "../propuestas/api/propuestasApi";
 import { logger } from "../../lib/logger";
+import StaffUniversalNav from "../../shared/components/StaffUniversalNav";
 
 const TABS = ["Perfil", "Propuesta", "Historial", "Notas", "Actividades"];
 
@@ -461,63 +462,7 @@ export default function LeadsStaffPage() {
   return (
     <div className="ln-shell">
       {/* ══ NAVBAR ══ */}
-      <header className="ln-navbar">
-        <div className="ln-navbar-inner">
-          <div className="ln-brand">
-            <span className="ln-brand-leaf">✦</span>
-            <div>
-              <span className="navbar-mark" style={{fontSize:"1rem",display:"block"}}>Origen Spa &amp; Bienestar</span>
-              <span className="ln-brand-sub">Belleza · Equilibrio · Tu mejor versión</span>
-            </div>
-          </div>
-          <nav className="ln-nav">
-            <a href="/">Inicio</a>
-            <a href="/staff/leads" className="ln-nav-active">Leads</a>
-            <a href="/staff/payers">Pagos</a>
-            <a href="/staff/customers">Clientes</a>
-          </nav>
-          <div className="ln-navbar-right">
-            <button className="ln-icon-btn" onClick={() => setShowNotifications(!showNotifications)}>
-              <IcoBell/>
-              {notifications.length > 0 && <span className="ln-badge">{notifications.length}</span>}
-            </button>
-            {showNotifications && (
-              <div className="ln-notifications-dropdown">
-                <div className="ln-notifications-header">
-                  <span>Notificaciones</span>
-                  <span className="ln-notifications-count">{notifications.length}</span>
-                </div>
-                {notifications.length === 0 ? (
-                  <div className="ln-notifications-empty">No hay notificaciones pendientes</div>
-                ) : (
-                  <div className="ln-notifications-list">
-                    {notifications.map(notif => (
-                      <div key={notif.id_notificacion} className="ln-notification-item">
-                        <div className="ln-notification-content">
-                          <span className="ln-notification-type">{notif.tipo_evento}</span>
-                          <span className="ln-notification-message">{notif.mensaje}</span>
-                          <span className="ln-notification-time">
-                            {new Date(notif.fecha_creacion).toLocaleString('es-ES')}
-                          </span>
-                        </div>
-                        <button 
-                          className="ln-notification-close"
-                          onClick={() => handleMarkAsRead(notif.id_notificacion)}
-                        >
-                          <IcoCheck/>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            <button className="ln-agent-btn">
-              <div className="ln-agent-avatar">A</div><span>Hola, Agente</span><IcoCaret/>
-            </button>
-          </div>
-        </div>
-      </header>
+      <StaffUniversalNav activePhase="leads" />
 
       {/* ══ LAYOUT ══ */}
       <div className="ln-layout">

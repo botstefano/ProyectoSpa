@@ -6,6 +6,7 @@ import {
   saveAttention,
   updateAttentionFollowUp,
 } from './api/customersApi'
+import StaffUniversalNav from '../../shared/components/StaffUniversalNav'
 
 const SPECIALISTS = ['María López', 'Carlos Vega', 'Lucía Fernández', 'Ana Ruiz']
 const TREATMENTS = [
@@ -343,20 +344,7 @@ export default function CustomersStaffPage() {
 
   return (
     <div className="customers-page">
-      <header className="customers-navbar">
-        <div className="customers-navbar-inner">
-          <a href="/" className="customers-brand">
-            <span className="customers-brand-icon"><Icon name="spa" size={25} /></span>
-            <span>Origen Spa &amp; Bienestar</span>
-          </a>
-          <nav className="customers-nav-links" aria-label="Navegación interna">
-            <a href="/staff/leads">Leads</a>
-            <a href="/staff/payers">Pagos</a>
-            <a href="/staff/customers" className="active">Clientes</a>
-          </nav>
-          <div className="customers-admin"><Icon name="user" size={17} /> <span>Fase 4 · CUSTOMERS</span></div>
-        </div>
-      </header>
+      <StaffUniversalNav activePhase="customers" />
 
       <main className="customers-main">
         <section className="customers-hero">

@@ -9,10 +9,20 @@ const ESTADO_INICIAL = {
   interes: '',
 }
 
-export default function LeadForm() {
+export default function LeadForm({ selectedTreatment = '' }) {
   const [form, setForm] = useState(ESTADO_INICIAL)
   const [status, setStatus] = useState({ state: 'idle', message: '' })
   const idVisitaRef = useRef(null)
+
+  useEffect(() => {
+    if (selectedTreatment) {
+      const lower = selectedTreatment.toLowerCase()
+      let mappedInterest = 'facial'
+      if (lower.includes('corporal') || lower.includes('envoltura')) mappedInterest = 'corporal'
+      else if (lower.includes('masaje') || lower.includes('piedras') || lower.includes('relajante')) mappedInterest = 'relajacion'
+      setForm((prev) => ({ ...prev, interes: mappedInterest }))
+    }
+  }, [selectedTreatment])
 
   useEffect(() => {
     registrarVisita().then((idVisita) => {
@@ -139,6 +149,28 @@ export default function LeadForm() {
           </select>
         </div>
       </div>
+
+      {selectedTreatment && (
+        <div
+          style={{
+            margin: '0.4rem 0 1rem 0',
+            padding: '0.6rem 0.9rem',
+            background: 'rgba(45, 106, 79, 0.12)',
+            border: '1px solid #2d6a4f',
+            borderRadius: '8px',
+            fontSize: '0.85rem',
+            color: '#1b4332',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span>🎯</span>
+          <span>
+            Tratamiento seleccionado: <strong>{selectedTreatment}</strong>
+          </span>
+        </div>
+      )}
 
       <button className="btn-primary" type="submit" disabled={status.state === 'loading'}>
         {status.state === 'loading' ? (

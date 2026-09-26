@@ -8,6 +8,7 @@ import {
 } from './api/payersApi'
 import { enviarEmailPagoSimulado } from './api/pagoSimuladoApi'
 import { isSupabaseConfigured } from '../../lib/supabaseClient'
+import StaffUniversalNav from '../../shared/components/StaffUniversalNav'
 
 const PAYMENT_METHODS = [
   { id: 'efectivo', label: 'Efectivo', icon: 'cash' },
@@ -485,38 +486,7 @@ export default function PayersStaffPage() {
 
   return (
     <div className="payers-page">
-      <header className="payers-navbar">
-        <div className="payers-navbar-inner">
-          <a href="/" className="payers-brand" aria-label="Volver a la página principal">
-            <span className="payers-brand-mark" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
-            <span>Origen Spa &amp; Bienestar</span>
-          </a>
-
-          <nav className="payers-nav-links" aria-label="Navegación interna">
-            <a href="/">Inicio</a>
-            <a href="/staff/leads">Leads</a>
-            <a href="/staff/payers" className="active">Pagos</a>
-            <a href="/staff/customers">Clientes</a>
-          </nav>
-
-          <div className="payers-user-tools">
-            <button className="icon-button" type="button" title="Alertas">
-              <Icon name="bell" size={21} />
-              <span className="notification-dot">3</span>
-            </button>
-            <span className="payers-divider" />
-            <button className="payers-admin" type="button">
-              <span className="avatar"><Icon name="user" size={18} /></span>
-              <span>Admin</span>
-              <Icon name="chevron" size={16} />
-            </button>
-          </div>
-        </div>
-      </header>
+      <StaffUniversalNav activePhase="payers" />
 
       <main className="payers-main">
         <section className="payers-hero">
