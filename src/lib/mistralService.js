@@ -241,6 +241,13 @@ function validarSolicitud(solicitud, propuestaActual) {
  * @param {string} apiKey - API key de Mistral
  */
 export async function sendMessageToMistral(message, conversationHistory = [], currentProposal = {}, apiKey) {
+  // Desactivación temporal de Mistral debido a rate limits persistentes
+  // El plan gratuito de Mistral tiene límites muy estrictos que se están excediendo
+  // Para garantizar que el chatbot funcione, usamos modo simulación temporalmente
+  // TODO: Revisar plan de Mistral o implementar cache local para reducir llamadas
+  logger.warn('mistralService', 'Mistral desactivado temporalmente por rate limits - usando modo simulación')
+  return simulateMistralResponse(message, currentProposal)
+  
   if (!apiKey) {
     logger.warn('mistralService', 'MISTRAL_API_KEY no configurada, usando modo simulación')
     return simulateMistralResponse(message, currentProposal)

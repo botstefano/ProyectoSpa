@@ -24,13 +24,31 @@ export async function generarPropuestaChatbot(idContacto, datosPropuestaInicial)
       throw handleSupabaseError(checkError, 'verificar propuesta existente')
     }
 
-    // Si ya existe una propuesta activa y no ha expirado, reutilizar
+    // Si ya existe una propuesta activa y no ha expirado, actualizarla con nuevos datos
+    // En lugar de reutilizar, creamos una nueva propuesta limpia para cada envío
     if (existing && new Date(existing.expira_en) > new Date()) {
-      logger.info('propuestasApi', 'Reutilizando propuesta existente', { idContacto })
+      logger.info('propuestasApi', 'Actualizando propuesta existente con nuevos datos', { idContacto })
+      
+      // Actualizar la propuesta existente con nuevos datos y limpiar historial
+      const { error: updateError } = await client
+        .from('propuesta_chatbot')
+        .update({
+          propuesta_original: datosPropuestaInicial,
+          propuesta_actual: datosPropuestaInicial,
+          estado_propuesta: 'enviada',
+          historial_conversacion: [], // Limpiar historial para nuevo chat
+          fecha_envio: new Date().toISOString(),
+          fecha_ultima_interaccion: new Date().toISOString()
+        })
+        .eq('id_propuesta', existing.id_propuesta)
+
+      if (updateError) throw handleSupabaseError(updateError, 'actualizar propuesta existente')
+
       return createResponse(true, {
         token: existing.token_propuesta,
         reutilizado: true,
-        expiraEn: existing.expira_en
+        expiraEn: existing.expira_en,
+        historialLimpiado: true
       })
     }
 
