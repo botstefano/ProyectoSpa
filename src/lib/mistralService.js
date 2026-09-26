@@ -271,8 +271,13 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       hasConversationHistory: conversationHistory.length > 0
     })
 
-    // Llamada a la API de Mistral
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    // Llamada a la API de Mistral con reintentos para rate limits
+    let retries = 0
+    const maxRetries = 3
+    let lastError = null
+
+    while (retries < maxRetries) {
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -286,16 +291,34 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       })
     })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: 'Error desconocido en API de Mistral' }))
-      const errorMessage = errorData.message || errorData.error?.message || 'Error en API de Mistral'
-      logger.error('mistralService', 'Error en respuesta de Mistral', { 
-        status: response.status,
-        statusText: response.statusText,
-        errorData: errorData 
-      })
-      throw new Error(`Mistral API (${response.status}): ${errorMessage}`)
-    }
+      // Manejo específico de rate limit (429)
+      if (response.status === 429) {
+        const errorData = await response.json().catch(() => ({ message: 'Rate limit exceeded' }))
+        logger.warn('mistralService', 'Rate limit de Mistral, reintentando...', { 
+          retry: retries + 1,
+          maxRetries: maxRetries,
+          errorData: errorData 
+        })
+        
+        // Esperar con backoff exponencial: 2s, 4s, 8s
+        const waitTime = Math.pow(2, retries) * 1000
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+        
+        retries++
+        lastError = new Error(`Mistral API (429): Rate limit exceeded`)
+        continue // Reintentar
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Error desconocido en API de Mistral' }))
+        const errorMessage = errorData.message || errorData.error?.message || 'Error en API de Mistral'
+        logger.error('mistralService', 'Error en respuesta de Mistral', { 
+          status: response.status,
+          statusText: response.statusText,
+          errorData: errorData 
+        })
+        throw new Error(`Mistral API (${response.status}): ${errorMessage}`)
+      }
 
     const result = await response.json()
     
@@ -308,7 +331,8 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
     logger.info('mistralService', 'Mensaje enviado a Mistral exitosamente', { 
       messageLength: message.length,
       responseLength: aiMessage.length,
-      validacion: validacion
+      validacion: validacion,
+      retries: retries
     })
 
     // Procesar la respuesta para detectar cambios en la propuesta
@@ -320,6 +344,12 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       proposalChanges: proposalChanges,
       validacion: validacion,
       rawResponse: result
+    }
+    }
+    
+    // Si todos los reintentos fallaron por rate limit
+    if (lastError) {
+      throw lastError
     }
   } catch (error) {
     logger.error('mistralService', 'Error comunicando con Mistral', { 
