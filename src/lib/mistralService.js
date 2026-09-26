@@ -243,9 +243,7 @@ function validarSolicitud(solicitud, propuestaActual) {
 export async function sendMessageToMistral(message, conversationHistory = [], currentProposal = {}, apiKey) {
   // Verificar si la API key está configurada
   if (!apiKey) {
-    logger.warn('mistralService', 'MISTRAL_API_KEY no configurada - usando modo simulación')
-    logger.warn('mistralService', 'Verifica que VITE_MISTRAL_API_KEY esté configurado en .env y en Render')
-    return simulateMistralResponse(message, currentProposal)
+    throw new Error('MISTRAL_API_KEY no configurada. Configura VITE_MISTRAL_API_KEY en .env y en Render')
   }
   
   // Loggear que la API key está detectada (sin mostrar el valor completo por seguridad)
@@ -367,9 +365,8 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       stack: error.stack 
     })
     
-    // Usar modo simulación como fallback
-    logger.warn('mistralService', 'Usando modo simulación como fallback')
-    return simulateMistralResponse(message, currentProposal)
+    // NO usar modo simulación - lanzar error directamente
+    throw new Error(`Error de Mistral API: ${error.message}. Por favor verifica tu plan y límites de tasa.`)
   }
 }
 

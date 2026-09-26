@@ -22,7 +22,6 @@ export default function PropuestaChatbotPage() {
   const [messages, setMessages] = useState([])
   const [inputMessage, setInputMessage] = useState('')
   const [sending, setSending] = useState(false)
-  const [confirmarVisible, setConfirmarVisible] = useState(false)
   const [confirming, setConfirming] = useState(false)
   
   const messagesEndRef = useRef(null)
@@ -116,11 +115,6 @@ export default function PropuestaChatbotPage() {
         // Actualizar propuesta si hubo cambios
         if (response.data.updatedProposal) {
           setPropuestaActual(response.data.updatedProposal)
-        }
-
-        // Mostrar botón de confirmación si el asistente indica
-        if (response.data.confirmar) {
-          setConfirmarVisible(true)
         }
       } else {
         throw new Error(response.error?.message || 'Error en chatbot')
@@ -536,27 +530,25 @@ export default function PropuestaChatbotPage() {
                   </button>
                 </form>
 
-                {/* Botón de confirmación */}
-                {confirmarVisible && (
-                  <button
-                    onClick={handleConfirmarPropuesta}
-                    disabled={confirming}
-                    style={{
-                      marginTop: '1rem',
-                      width: '100%',
-                      padding: '1rem',
-                      background: confirming ? 'var(--color-ink-muted)' : '#b7d2b9',
-                      color: '#1B2A21',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: confirming ? 'not-allowed' : 'pointer',
-                      fontSize: '1rem',
-                      fontWeight: '600'
-                    }}
-                  >
-                    {confirming ? 'Confirmando...' : '✅ Confirmar Propuesta'}
-                  </button>
-                )}
+                {/* Botón de confirmación - siempre visible */}
+                <button
+                  onClick={handleConfirmarPropuesta}
+                  disabled={confirming}
+                  style={{
+                    marginTop: '1rem',
+                    width: '100%',
+                    padding: '1rem',
+                    background: confirming ? 'var(--color-ink-muted)' : '#b7d2b9',
+                    color: '#1B2A21',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: confirming ? 'not-allowed' : 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: '600'
+                  }}
+                >
+                  {confirming ? 'Confirmando...' : '✅ Confirmar Propuesta'}
+                </button>
               </div>
             </div>
           </div>
