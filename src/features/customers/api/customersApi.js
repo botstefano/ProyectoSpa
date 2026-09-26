@@ -241,16 +241,19 @@ export async function saveAttention(payload, source) {
     }
 
     if (payload.fecha_hora_inicio) {
-      const dateValidation = validateDate(payload.fecha_hora_inicio, false, true)
+      const dateValidation = validateDate(payload.fecha_hora_inicio, true, true)
       if (!dateValidation.valid) {
         throw new Error(dateValidation.error)
       }
     }
 
     if (payload.fecha_hora_fin) {
-      const dateValidation = validateDate(payload.fecha_hora_fin, false, true)
+      const dateValidation = validateDate(payload.fecha_hora_fin, true, true)
       if (!dateValidation.valid) {
         throw new Error(dateValidation.error)
+      }
+      if (payload.fecha_hora_inicio && new Date(payload.fecha_hora_fin) <= new Date(payload.fecha_hora_inicio)) {
+        throw new Error('La fecha y hora de fin debe ser posterior a la de inicio')
       }
     }
 
