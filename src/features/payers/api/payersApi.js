@@ -53,10 +53,10 @@ export async function obtenerLeadsParaPago() {
         const score = det?.lead_score ?? (tieneChatbotAceptada ? 50 : 0)
         const propuestaAceptada = det?.propuesta_aceptada || tieneChatbotAceptada || false
 
-        // Estado del contacto: admitir 'lead', 'payer' o 'buyer' que ya aceptó propuesta
+        // Estado del contacto: admitir 'lead', 'payer', 'customer' o 'buyer' que ya aceptó propuesta
         const estadoObj = Array.isArray(lead.estado_contacto) ? lead.estado_contacto[0] : lead.estado_contacto
         const estadoNombre = estadoObj?.nombre_estado || ''
-        const estadoValido = estadoNombre === 'lead' || estadoNombre === 'payer' || (estadoNombre === 'buyer' && propuestaAceptada)
+        const estadoValido = estadoNombre === 'lead' || estadoNombre === 'payer' || estadoNombre === 'customer' || (estadoNombre === 'buyer' && propuestaAceptada)
 
         return estadoValido && score >= 50 && propuestaAceptada
       })

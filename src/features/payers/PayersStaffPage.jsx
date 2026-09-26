@@ -156,13 +156,15 @@ function MethodIcon({ name }) {
 function extractServiceFromLead(lead) {
   if (!lead) return null
   const det = Array.isArray(lead.lead_detalle) ? lead.lead_detalle[0] : lead.lead_detalle
-  const chatProp = Array.isArray(lead.propuesta_chatbot)
-    ? lead.propuesta_chatbot.find(p => p.estado_propuesta === 'aceptada')?.propuesta_actual
-    : lead.propuesta_chatbot?.estado_propuesta === 'aceptada'
-      ? lead.propuesta_chatbot?.propuesta_actual
-      : null
+  const chatPropList = Array.isArray(lead.propuesta_chatbot)
+    ? lead.propuesta_chatbot
+    : [lead.propuesta_chatbot].filter(Boolean)
+  const latestAccepted = chatPropList
+    .slice()
+    .sort((a, b) => (b.id_propuesta || 0) - (a.id_propuesta || 0))
+    .find(p => p?.estado_propuesta === 'aceptada')?.propuesta_actual
 
-  const prop = det?.datos_propuesta || chatProp || {}
+  const prop = latestAccepted || det?.datos_propuesta || {}
   const desc = Array.isArray(lead.descarga) ? lead.descarga[0] : lead.descarga
 
   const parseNumber = (val, def) => {
