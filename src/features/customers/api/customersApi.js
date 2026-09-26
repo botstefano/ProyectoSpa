@@ -115,18 +115,22 @@ export function isPaymentConfirmed(status) {
 }
 
 function toCustomer(row) {
-  const pago = Array.isArray(row.pago_detalle) ? row.pago_detalle[0] : row.pago_detalle
+  const pagoDet = Array.isArray(row.pago_detalle) ? row.pago_detalle[0] : row.pago_detalle
+  const pagoSimArray = Array.isArray(row.pago_simulado) ? row.pago_simulado : [row.pago_simulado].filter(Boolean)
+  const pagoSim = pagoSimArray.find(p => p?.estado_pago === 'completado') || pagoSimArray[0]
+
+  const estado = pagoDet?.estado_pago || (pagoSim?.estado_pago === 'completado' ? 'confirmado' : null)
+  const fecha = pagoDet?.fecha_pago || pagoSim?.fecha_completado || null
+  const servicio = pagoDet?.servicio_contratado || pagoSim?.servicio_contratado || 'Servicio spa'
 
   return {
     id_contacto: row.id_contacto,
     nombre: row.nombre,
     telefono: row.telefono,
     email: row.email,
-    estado_pago: pago?.estado_pago ?? 'Sin pago registrado',
-    fecha_pago: pago?.fecha_pago ?? null,
-    servicio_contratado: pago?.servicio_contratado || pago?.servicio_contratado 
-      ? pago.servicio_contratado 
-      : 'Servicio contratado en Fase 3',
+    estado_pago: estado ?? 'Sin pago registrado',
+    fecha_pago: fecha,
+    servicio_contratado: servicio,
   }
 }
 
@@ -143,7 +147,7 @@ export async function listCustomersForAttention() {
   try {
     const { data, error } = await supabase
       .from('contacto')
-      .select('id_contacto,nombre,telefono,email,pago_detalle(estado_pago,fecha_pago,servicio_contratado)')
+      .select('id_contacto,nombre,telefono,email,pago_detalle(estado_pago,fecha_pago,servicio_contratado),pago_simulado(estado_pago,fecha_completado,servicio_contratado,monto_total)')
       .order('id_contacto', { ascending: false })
       .limit(100)
 
@@ -159,7 +163,7 @@ export async function listCustomersForAttention() {
 
     const customers = data.map(toCustomer)
     
-    // Filtrar solo contactos que tienen algún detalle de pago
+    // Filtrar contactos que tienen algún detalle de pago o propuesta
     const customersWithPayment = customers.filter(c => c.estado_pago !== 'Sin pago registrado')
     
     if (customersWithPayment.length === 0) {

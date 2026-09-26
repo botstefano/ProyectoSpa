@@ -687,6 +687,30 @@ export default function PayersStaffPage() {
                         : '📧 Enviar email de pago al cliente'}
                   </button>
                 )}
+
+                {initialPaid && (
+                  <a 
+                    href="/staff/customers" 
+                    className="primary-payment-button"
+                    style={{
+                      marginTop: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      textDecoration: 'none',
+                      background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
+                      color: '#ffffff',
+                      fontWeight: 600,
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid #40916c',
+                      boxShadow: '0 4px 12px rgba(45, 106, 79, 0.35)',
+                    }}
+                  >
+                    <span>➔ Pasar a Fase 4: Atención al Cliente</span>
+                  </a>
+                )}
               </>
             ) : (
               <div className="client-proof">
@@ -985,6 +1009,31 @@ export default function PayersStaffPage() {
                 <div><span>Estado del servicio</span><strong>{serviceStatus}</strong></div>
                 <div><span>Saldo pendiente</span><strong>{money(balance)}</strong></div>
               </div>
+
+              {initialPaid && (
+                <div style={{ marginTop: '16px' }}>
+                  <a
+                    href="/staff/customers"
+                    className="primary-payment-button"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      textDecoration: 'none',
+                      background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
+                      color: '#ffffff',
+                      fontWeight: 600,
+                      padding: '12px 18px',
+                      borderRadius: '8px',
+                      border: '1px solid #40916c',
+                      boxShadow: '0 4px 12px rgba(45, 106, 79, 0.35)',
+                    }}
+                  >
+                    <span>➔ Continuar a Fase 4: Atención en Clientes</span>
+                  </a>
+                </div>
+              )}
             </article>
 
             <article className="payers-card" id="indicadores">
