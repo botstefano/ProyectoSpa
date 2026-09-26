@@ -194,6 +194,11 @@ export async function enviarMensajeChatbot(idPropuesta, mensaje, conversationHis
   try {
     const mistralApiKey = import.meta.env.VITE_MISTRAL_API_KEY
 
+    // Logging temporal para diagnóstico
+    console.log('[DEBUG] API Key detectada:', mistralApiKey ? 'SI' : 'NO')
+    console.log('[DEBUG] Longitud:', mistralApiKey?.length)
+    console.log('[DEBUG] Prefijo:', mistralApiKey?.substring(0, 8) + '...')
+
     // Llamar a Mistral
     const mistralResponse = await sendMessageToMistral(
       mensaje,
