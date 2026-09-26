@@ -241,13 +241,6 @@ function validarSolicitud(solicitud, propuestaActual) {
  * @param {string} apiKey - API key de Mistral
  */
 export async function sendMessageToMistral(message, conversationHistory = [], currentProposal = {}, apiKey) {
-  // Desactivación temporal de Mistral debido a rate limits persistentes
-  // El plan gratuito de Mistral tiene límites muy estrictos que se están excediendo
-  // Para garantizar que el chatbot funcione, usamos modo simulación temporalmente
-  // TODO: Revisar plan de Mistral o implementar cache local para reducir llamadas
-  logger.warn('mistralService', 'Mistral desactivado temporalmente por rate limits - usando modo simulación')
-  return simulateMistralResponse(message, currentProposal)
-  
   if (!apiKey) {
     logger.warn('mistralService', 'MISTRAL_API_KEY no configurada, usando modo simulación')
     return simulateMistralResponse(message, currentProposal)
@@ -262,8 +255,8 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
     
     // Construir el array de mensajes para Mistral
     // Transformar el historial de conversación del formato español al formato de Mistral
-    // Limitar a los últimos 10 mensajes para evitar sobrecargar la API
-    const recentHistory = conversationHistory.slice(-10)
+    // Limitar drásticamente a los últimos 3 mensajes para evitar rate limits
+    const recentHistory = conversationHistory.slice(-3)
     const transformedHistory = recentHistory.map(msg => ({
       role: msg.rol || msg.role,
       content: msg.mensaje || msg.content
@@ -280,9 +273,9 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       hasConversationHistory: conversationHistory.length > 0
     })
 
-    // Llamada a la API de Mistral con reintentos para rate limits
+    // Llamada a la API de Mistral con reintentos reducidos para evitar gastar créditos
     let retries = 0
-    const maxRetries = 3
+    const maxRetries = 1 // Reducir a 1 reintento para no gastar créditos
     let lastError = null
 
     while (retries < maxRetries) {
@@ -309,8 +302,8 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
           errorData: errorData 
         })
         
-        // Esperar con backoff exponencial: 2s, 4s, 8s
-        const waitTime = Math.pow(2, retries) * 1000
+        // Esperar con backoff exponencial: 3s (solo un reintento)
+        const waitTime = 3000
         await new Promise(resolve => setTimeout(resolve, waitTime))
         
         retries++
@@ -376,59 +369,29 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
  * Construir el prompt del sistema con contexto completo del negocio
  */
 function buildSystemPrompt(currentProposal) {
-  const catalogoJson = JSON.stringify(ORIGEN_SPA_CATALOGO, null, 2)
+  // Usar solo información esencial del catálogo para reducir tokens
+  const catalogoResumido = {
+    servicios: Object.keys(ORIGEN_SPA_CATALOGO.servicios).join(', '),
+    politicas: ORIGEN_SPA_CATALOGO.politicas,
+    reglas_clave: "Descuentos máx 15%, precios mínimos según servicio, respetar disponibilidad"
+  }
   
-  return `Eres un asistente de ventas experto de Origen Spa & Bienestar, un spa de belleza y bienestar premium en Trujillo, La Libertad.
+  return `Eres asistente de Origen Spa en Trujillo. Ayuda a negociar propuestas de spa.
 
-Tu rol es ayudar a los clientes a negociar propuestas de servicios de manera amigable, profesional y knowledge-based.
+SERVICIOS: ${catalogoResumido.servicios}
+POLÍTICAS: ${JSON.stringify(catalogoResumido.politicas, null, 2)}
+REGLAS CLAVE: ${catalogoResumido.reglas_clave}
 
-CATÁLOGO COMPLETO DE SERVICIOS:
-${catalogoJson}
+PROPUESTA ACTUAL: ${JSON.stringify(currentProposal, null, 2)}
 
-REGLAS DE NEGOCIACIÓN STRICTAS:
-1. PRECIOS: 
-   - Solo puedes ofrecer descuentos hasta el máximo especificado en el catálogo
-   - Nunca aceptes precios por debajo del precio mínimo del servicio
-   - Si el cliente pide un precio irrazonable, explica el costo y ofrece alternativas
+REGLAS:
+- Ofrecer descuentos hasta 15% máximo
+- Respetar precios mínimos del catálogo
+- Usar tono amable y profesional en español
+- Si el cliente pide algo irrazonable, explica y ofrece alternativas
+- Responde en español de forma conversacional
 
-2. DISPONIBILIDAD:
-   - Respeta estrictamente los días y horarios disponibles según el catálogo
-   - Si el cliente pide un día no disponible, ofrece los días disponibles
-   - Considera contraindicaciones antes de aceptar reservas
-
-3. UPSELLING:
-   - Sugiere servicios complementarios del catálogo cuando sea apropiado
-   - Ofrece productos del catálogo que complementen el tratamiento
-   - Nunca fuerces ventas agresivas, solo sugerencias naturales
-
-4. NEGOCIACIÓN:
-   - Siempre valida las solicitudes contra el catálogo antes de aceptar
-   - Si algo no está en el catálogo, explícalo cortésmente
-   - Si una solicitud viola políticas, explica la política y ofrece alternativas
-
-5. TONO Y ESTILO:
-   - Amable, servicial y profesional
-   - Usa el nombre del cliente cuando sea posible
-   - Sé empático pero firme en las políticas del negocio
-   - Prioriza la satisfacción pero protege los márgenes
-
-PROPUESTA ACTUAL DEL CLIENTE:
-${JSON.stringify(currentProposal, null, 2)}
-
-PROCESO DE RESPUESTA:
-1. Analiza la solicitud del cliente contra el catálogo
-2. Valida si es razonable según políticas y disponibilidad
-3. Si es válida: actualiza la propuesta y confirma
-4. Si no es válida: explica por qué y ofrece alternativas del catálogo
-5. Si hay oportunidad de upselling: sugiere servicios complementarios
-6. Siempre confirma los cambios antes de proceder
-
-Si el cliente pide algo sin sentido o no relacionado con servicios spa:
-- Redirige cortésmente a los servicios disponibles
-- Ofrece alternativas relevantes del catálogo
-- Mantén un tono helpful pero firme
-
-Responde de manera conversacional y amigable. Si hay cambios en la propuesta, indícalos claramente con el nuevo precio y condiciones.`
+Negocia precio, fecha u horario según las políticas. Si hay cambios, indica claramente el nuevo precio.`
 }
 
 /**
