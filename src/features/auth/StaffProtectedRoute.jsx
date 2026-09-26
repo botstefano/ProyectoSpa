@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useStaffAuth } from './StaffAuthContext'
+import BrandLogo from '../../shared/components/BrandLogo'
 
 export default function StaffProtectedRoute({ children }) {
   const { isAuthenticated, openLoginModal } = useStaffAuth()
@@ -21,8 +22,8 @@ export default function StaffProtectedRoute({ children }) {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(180deg, #0d1e16 0%, #06110c 100%)',
-          color: '#edf2f4',
+          background: 'var(--color-bg, #16231C)',
+          color: 'var(--color-ink, #F3EEE2)',
           padding: '2rem',
           textAlign: 'center',
         }}
@@ -30,19 +31,43 @@ export default function StaffProtectedRoute({ children }) {
         <div
           style={{
             maxWidth: '460px',
-            background: 'rgba(255, 255, 255, 0.04)',
-            padding: '2.5rem',
-            borderRadius: '20px',
-            border: '1px solid rgba(82, 183, 136, 0.3)',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+            background: 'var(--color-bg-alt, #1F3026)',
+            padding: '2.5rem 2rem',
+            borderRadius: '4px',
+            border: '1px solid var(--color-line, rgba(243, 238, 226, 0.16))',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
           }}
         >
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛡️</div>
-          <h1 style={{ fontSize: '1.6rem', fontWeight: 700, margin: '0 0 0.5rem 0', color: '#f8f9fa' }}>
+          <div style={{ marginBottom: '1.2rem' }}>
+            <span className="payers-brand-mark" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+          </div>
+
+          <h1
+            style={{
+              fontFamily: 'var(--font-display, Fraunces, serif)',
+              fontSize: '1.5rem',
+              fontWeight: 500,
+              margin: '0 0 0.6rem 0',
+              color: 'var(--color-ink, #F3EEE2)',
+            }}
+          >
             Portal Interno Staff
           </h1>
-          <p style={{ color: '#b7d2b9', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '1.8rem' }}>
-            Esta sección contiene información comercial, financiera y clínica de <strong>Origen Spa</strong> bajo la metodología IMPULSE. Se requiere autenticación de personal para acceder.
+
+          <p
+            style={{
+              color: 'var(--color-ink-muted, #B9C4B7)',
+              fontSize: '0.92rem',
+              lineHeight: 1.6,
+              marginBottom: '1.8rem',
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            Acceso restringido al personal autorizado de <strong>Origen Spa &amp; Bienestar</strong> bajo la metodología IMPULSE. Por favor, identifícate para continuar.
           </p>
 
           <button
@@ -50,33 +75,32 @@ export default function StaffProtectedRoute({ children }) {
             onClick={() => openLoginModal(location.pathname)}
             style={{
               width: '100%',
-              padding: '0.9rem',
-              borderRadius: '10px',
+              padding: '0.85rem',
+              borderRadius: '3px',
               border: 'none',
-              background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
-              borderTop: '1px solid #52b788',
-              color: '#ffffff',
-              fontWeight: 700,
-              fontSize: '1rem',
+              background: 'var(--color-accent, #C89B5C)',
+              color: 'var(--color-ink-on-contrast, #1B2A21)',
+              fontWeight: 600,
+              fontSize: '0.92rem',
+              fontFamily: 'var(--font-body)',
               cursor: 'pointer',
-              boxShadow: '0 4px 15px rgba(45, 106, 79, 0.4)',
-              marginBottom: '1rem',
+              marginBottom: '1.2rem',
             }}
           >
-            🔐 Iniciar sesión como Staff
+            Iniciar sesión de personal
           </button>
 
           <a
             href="/"
             style={{
               display: 'inline-block',
-              color: '#95d5b2',
-              fontSize: '0.85rem',
-              textDecoration: 'none',
-              marginTop: '0.5rem',
+              color: 'var(--color-ink-muted, #B9C4B7)',
+              fontSize: '0.84rem',
+              textDecoration: 'underline',
+              fontFamily: 'var(--font-body)',
             }}
           >
-            ← Volver a la página principal (Clientes)
+            ← Volver a la página principal
           </a>
         </div>
       </div>

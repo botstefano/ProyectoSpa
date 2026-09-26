@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStaffAuth } from './StaffAuthContext'
+import BrandLogo from '../../shared/components/BrandLogo'
 
 export default function StaffLoginModal() {
   const { loginModalOpen, closeLoginModal, login, redirectAfterLogin } = useStaffAuth()
@@ -27,7 +28,7 @@ export default function StaffLoginModal() {
       } else {
         setError(res.error)
       }
-    }, 400)
+    }, 350)
   }
 
   function handleQuickLogin(user, pass) {
@@ -41,7 +42,7 @@ export default function StaffLoginModal() {
       if (res.success) {
         navigate(redirectAfterLogin || '/staff/leads')
       }
-    }, 350)
+    }, 300)
   }
 
   return (
@@ -53,10 +54,9 @@ export default function StaffLoginModal() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(10, 25, 18, 0.75)',
-        backdropFilter: 'blur(8px)',
-        padding: '1rem',
-        animation: 'fadeIn 0.2s ease-out',
+        backgroundColor: 'rgba(10, 18, 14, 0.85)',
+        backdropFilter: 'blur(6px)',
+        padding: '1.25rem',
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) closeLoginModal()
@@ -65,13 +65,13 @@ export default function StaffLoginModal() {
       <div
         style={{
           width: '100%',
-          maxWidth: '440px',
-          background: 'linear-gradient(145deg, #183325 0%, #0d1e16 100%)',
-          borderRadius: '16px',
-          border: '1px solid rgba(82, 183, 136, 0.35)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 30px rgba(45, 106, 79, 0.25)',
-          padding: '2rem',
-          color: '#edf2f4',
+          maxWidth: '420px',
+          background: 'var(--color-bg-alt, #1F3026)',
+          borderRadius: '4px',
+          border: '1px solid var(--color-line, rgba(243, 238, 226, 0.2))',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
+          padding: '2.4rem 2rem',
+          color: 'var(--color-ink, #F3EEE2)',
           position: 'relative',
         }}
       >
@@ -85,39 +85,45 @@ export default function StaffLoginModal() {
             right: '1rem',
             background: 'transparent',
             border: 'none',
-            color: 'rgba(255, 255, 255, 0.6)',
-            fontSize: '1.4rem',
+            color: 'var(--color-ink-muted, #B9C4B7)',
+            fontSize: '1.3rem',
             cursor: 'pointer',
             padding: '4px 8px',
-            borderRadius: '6px',
             lineHeight: 1,
           }}
           title="Cerrar"
         >
-          ×
+          ✕
         </button>
 
-        {/* Header del Modal */}
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div
+        {/* Cabecera con Logo Oficial */}
+        <div style={{ textAlign: 'center', marginBottom: '1.8rem' }}>
+          <div style={{ display: 'inline-block', marginBottom: '0.6rem' }}>
+            <span className="payers-brand-mark" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+          </div>
+          <h2
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '54px',
-              height: '54px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, rgba(82, 183, 136, 0.25) 0%, rgba(45, 106, 79, 0.4) 100%)',
-              border: '1px solid #52b788',
-              marginBottom: '0.8rem',
+              fontFamily: 'var(--font-display, Fraunces, serif)',
+              fontSize: '1.35rem',
+              fontWeight: 500,
+              margin: '0 0 0.3rem 0',
+              color: 'var(--color-ink, #F3EEE2)',
             }}
           >
-            <span style={{ fontSize: '1.6rem' }}>🔐</span>
-          </div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: '0 0 0.3rem 0', color: '#f8f9fa' }}>
-            Portal Exclusivo Staff
+            Acceso al Panel Staff
           </h2>
-          <p style={{ margin: 0, fontSize: '0.88rem', color: '#b7d2b9' }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.84rem',
+              color: 'var(--color-ink-muted, #B9C4B7)',
+              fontFamily: 'var(--font-body)',
+            }}
+          >
             Origen Spa &amp; Bienestar · Metodología IMPULSE
           </p>
         </div>
@@ -127,31 +133,29 @@ export default function StaffLoginModal() {
           {error && (
             <div
               style={{
-                background: 'rgba(224, 76, 76, 0.15)',
-                border: '1px solid #e04c4c',
-                color: '#ffb3b3',
+                background: 'rgba(217, 175, 160, 0.1)',
+                border: '1px solid var(--color-clay, #D9AFA0)',
+                color: 'var(--color-ink, #F3EEE2)',
                 padding: '0.65rem 0.85rem',
-                borderRadius: '8px',
-                fontSize: '0.85rem',
-                marginBottom: '1rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
+                borderRadius: '3px',
+                fontSize: '0.84rem',
+                marginBottom: '1.2rem',
               }}
             >
-              <span>⚠️</span>
-              <span>{error}</span>
+              {error}
             </div>
           )}
 
-          <div style={{ marginBottom: '1rem' }}>
+          <div style={{ marginBottom: '1.1rem' }}>
             <label
               style={{
                 display: 'block',
-                fontSize: '0.82rem',
+                fontSize: '0.8rem',
                 fontWeight: 600,
-                color: '#b7d2b9',
-                marginBottom: '0.35rem',
+                color: 'var(--color-ink-muted, #B9C4B7)',
+                marginBottom: '0.4rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
               }}
             >
               Usuario o Correo Staff
@@ -165,25 +169,28 @@ export default function StaffLoginModal() {
               style={{
                 width: '100%',
                 boxSizing: 'border-box',
-                padding: '0.75rem 0.9rem',
-                borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(82, 183, 136, 0.4)',
-                color: '#ffffff',
-                fontSize: '0.95rem',
+                padding: '0.75rem 0.85rem',
+                borderRadius: '3px',
+                background: 'var(--color-bg, #16231C)',
+                border: '1px solid var(--color-line, rgba(243, 238, 226, 0.2))',
+                color: 'var(--color-ink, #F3EEE2)',
+                fontSize: '0.92rem',
+                fontFamily: 'var(--font-body)',
                 outline: 'none',
               }}
             />
           </div>
 
-          <div style={{ marginBottom: '1.3rem', position: 'relative' }}>
+          <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
             <label
               style={{
                 display: 'block',
-                fontSize: '0.82rem',
+                fontSize: '0.8rem',
                 fontWeight: 600,
-                color: '#b7d2b9',
-                marginBottom: '0.35rem',
+                color: 'var(--color-ink-muted, #B9C4B7)',
+                marginBottom: '0.4rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
               }}
             >
               Contraseña
@@ -198,12 +205,13 @@ export default function StaffLoginModal() {
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '0.75rem 2.5rem 0.75rem 0.9rem',
-                  borderRadius: '8px',
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(82, 183, 136, 0.4)',
-                  color: '#ffffff',
-                  fontSize: '0.95rem',
+                  padding: '0.75rem 2.5rem 0.75rem 0.85rem',
+                  borderRadius: '3px',
+                  background: 'var(--color-bg, #16231C)',
+                  border: '1px solid var(--color-line, rgba(243, 238, 226, 0.2))',
+                  color: 'var(--color-ink, #F3EEE2)',
+                  fontSize: '0.92rem',
+                  fontFamily: 'var(--font-body)',
                   outline: 'none',
                 }}
               />
@@ -212,17 +220,18 @@ export default function StaffLoginModal() {
                 onClick={() => setShowPassword(!showPassword)}
                 style={{
                   position: 'absolute',
-                  right: '0.75rem',
+                  right: '0.65rem',
                   top: '50%',
                   transform: 'translateY(-50%)',
                   background: 'transparent',
                   border: 'none',
-                  color: '#b7d2b9',
+                  color: 'var(--color-ink-muted, #B9C4B7)',
                   cursor: 'pointer',
-                  fontSize: '0.9rem',
+                  fontSize: '0.75rem',
+                  textTransform: 'uppercase',
                 }}
               >
-                {showPassword ? '🙈' : '👁️'}
+                {showPassword ? 'Ocultar' : 'Ver'}
               </button>
             </div>
           </div>
@@ -233,57 +242,58 @@ export default function StaffLoginModal() {
             style={{
               width: '100%',
               padding: '0.85rem',
-              borderRadius: '8px',
+              borderRadius: '3px',
               border: 'none',
-              background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
-              borderTop: '1px solid #52b788',
-              color: '#ffffff',
-              fontWeight: 700,
-              fontSize: '1rem',
+              background: 'var(--color-accent, #C89B5C)',
+              color: 'var(--color-ink-on-contrast, #1B2A21)',
+              fontWeight: 600,
+              fontSize: '0.92rem',
+              fontFamily: 'var(--font-body)',
               cursor: loading ? 'wait' : 'pointer',
-              boxShadow: '0 4px 15px rgba(45, 106, 79, 0.4)',
-              transition: 'all 0.2s ease',
+              transition: 'background 0.2s ease',
             }}
           >
-            {loading ? 'Validando credenciales...' : 'Ingresar a Gestión Staff ➔'}
+            {loading ? 'Validando…' : 'Ingresar al sistema'}
           </button>
         </form>
 
-        {/* Acceso rápido para pruebas / demo */}
-        <div style={{ marginTop: '1.5rem', paddingTop: '1.2rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-          <span style={{ display: 'block', fontSize: '0.75rem', color: '#95d5b2', marginBottom: '0.6rem' }}>
-            Accesos rápidos autorizados para el equipo:
+        {/* Accesos rápidos discretos para pruebas */}
+        <div style={{ marginTop: '1.5rem', paddingTop: '1.2rem', borderTop: '1px solid var(--color-line, rgba(243, 238, 226, 0.12))' }}>
+          <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--color-ink-muted, #B9C4B7)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Accesos directos autorizados:
           </span>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
             <button
               type="button"
               onClick={() => handleQuickLogin('admin', 'spa2026')}
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: '6px',
-                color: '#edf2f4',
+                background: 'transparent',
+                border: '1px solid var(--color-line, rgba(243, 238, 226, 0.18))',
+                borderRadius: '3px',
+                color: 'var(--color-ink, #F3EEE2)',
                 padding: '0.45rem',
-                fontSize: '0.75rem',
+                fontSize: '0.76rem',
+                fontFamily: 'var(--font-body)',
                 cursor: 'pointer',
               }}
             >
-              👑 Admin (General)
+              Admin General
             </button>
             <button
               type="button"
               onClick={() => handleQuickLogin('stefano', 'admin123')}
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: '6px',
-                color: '#edf2f4',
+                background: 'transparent',
+                border: '1px solid var(--color-line, rgba(243, 238, 226, 0.18))',
+                borderRadius: '3px',
+                color: 'var(--color-ink, #F3EEE2)',
                 padding: '0.45rem',
-                fontSize: '0.75rem',
+                fontSize: '0.76rem',
+                fontFamily: 'var(--font-body)',
                 cursor: 'pointer',
               }}
             >
-              👤 Stefano (Sistema)
+              Stefano (Sistema)
             </button>
           </div>
         </div>

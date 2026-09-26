@@ -26,11 +26,11 @@ export default function BuyersLanding() {
       <Hero onCtaClick={scrollToForm} />
       <WhyUs />
       
-      {/* Catálogo Interactivo de Servicios */}
+      {/* Catálogo Interactivo y Editorial de Servicios */}
       <InteractiveServices onSelectTreatment={handleSelectTreatment} />
 
-      {/* Widget Interactivo de Diagnóstico Rápido */}
-      <section style={{ backgroundColor: '#0d1d15', padding: '3rem 0' }}>
+      {/* Orientación Técnica de Tratamiento */}
+      <section className="section section-line" style={{ background: 'var(--color-bg, #16231C)' }}>
         <div className="container">
           <SpaQuizWidget onSelectTreatment={handleSelectTreatment} />
         </div>
@@ -43,18 +43,19 @@ export default function BuyersLanding() {
             <div className="form-intro">
               <span
                 style={{
-                  color: 'var(--color-brand, #2d6a4f)',
-                  fontSize: '0.85rem',
-                  fontWeight: 700,
+                  color: 'var(--color-accent-dark, #A87F45)',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   display: 'block',
-                  marginBottom: '0.5rem',
+                  marginBottom: '0.4rem',
+                  fontFamily: 'var(--font-body)',
                 }}
               >
-                Fase 1: Diagnóstico Gratuito
+                Primer Contacto · Sin Costo
               </span>
-              <h2>Tu primer diagnóstico es sin costo</h2>
+              <h2>Tu primer diagnóstico es gratis</h2>
               <p>
                 Cuéntanos un poco sobre tu piel y te enviamos una guía personalizada además de
                 los horarios disponibles para tu diagnóstico presencial, sin costo.
@@ -63,15 +64,15 @@ export default function BuyersLanding() {
                 <div
                   style={{
                     marginTop: '1.2rem',
-                    padding: '0.9rem 1.2rem',
-                    borderRadius: '10px',
-                    background: '#e8f5e9',
-                    border: '1px solid #81c784',
-                    color: '#1b5e20',
-                    fontSize: '0.92rem',
+                    padding: '0.75rem 1rem',
+                    border: '1px solid var(--color-line-contrast, rgba(27, 42, 33, 0.18))',
+                    background: 'rgba(27, 42, 33, 0.05)',
+                    color: 'var(--color-ink-on-contrast, #1B2A21)',
+                    fontSize: '0.88rem',
+                    fontFamily: 'var(--font-body)',
                   }}
                 >
-                  🌿 Hemos pre-seleccionado <strong>{selectedTreatment}</strong> en tu solicitud. Nuestro especialista adaptará el diagnóstico en base a este servicio.
+                  Tratamiento pre-seleccionado: <strong>{selectedTreatment}</strong>. Evaluaremos tu piel en función de este protocolo.
                 </div>
               )}
             </div>

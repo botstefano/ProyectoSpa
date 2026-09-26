@@ -1,116 +1,114 @@
 import { useState } from 'react'
 
-const CATEGORIAS = ['Todos', 'Faciales', 'Masajes', 'Corporales', 'Rituales']
+const CATEGORIAS = ['Todos', 'Faciales', 'Masajes', 'Corporales', 'Diagnóstico']
 
-const CATALOGO = [
+const TRATAMIENTOS = [
   {
     id: 'facial-hidratante',
     categoria: 'Faciales',
-    nombre: 'Facial Hidratante Intensivo',
-    tag: 'Más solicitado',
+    nombre: 'Facial hidratante intensivo',
+    desc: 'Limpieza profunda, exfoliación suave e hidratación biocompatible con ácido hialurónico según tu tipo de piel.',
     duracion: '60 min',
     precio: 'Desde S/ 80',
-    descripcion: 'Tratamiento hidronutritivo con activos biocompatibles y ácido hialurónico para devolver flexibilidad y tersura a la piel.',
-    beneficios: ['Restablece la barrera cutánea', 'Atenúa líneas de deshidratación', 'Aporta luminosidad inmediata'],
+    detalles: 'Restablece la barrera hidrolipídica cutánea, atenúa líneas de deshidratación y aporta luminosidad natural.',
     protocolo: [
-      'Doble limpieza con emulsión botánica',
+      'Doble higiene facial con emulsión botánica',
       'Exfoliación suave con microesferas de jojoba',
       'Vaporización tibia y tonificación con hidrolatos',
-      'Mascarilla hidroplástica selladora',
-      'Masaje facial de estimulación circulatoria',
+      'Mascarilla hidroplástica selladora de alta nutrición',
+      'Masaje facial de estimulación circulatoria y fotoprotección',
     ],
   },
   {
     id: 'limpieza-profunda',
     categoria: 'Faciales',
-    nombre: 'Limpieza Facial Profunda con Ozono',
-    tag: 'Esencial',
+    nombre: 'Limpieza facial profunda con ozono',
+    desc: 'Higiene cutánea integral con vapor de ozono y alta frecuencia desinfectante. Ideal para pieles asfícticas.',
     duracion: '60 min',
     precio: 'Desde S/ 95',
-    descripcion: 'Higiene cutánea integral con vapor de ozono y alta frecuencia para eliminar impurezas sin agredir el tejido.',
-    beneficios: ['Desobstrucción profunda de poros', 'Efecto descongestivo y bactericida', 'Textura suave y oxigenada'],
+    detalles: 'Eliminación controlada de comedones e impurezas sin dañar el tejido, con acción descongestiva inmediata.',
     protocolo: [
-      'Desmaquillado y peeling ultrasónico',
-      'Vapor de ozono desincrustante',
-      'Extracción suave no lesiva',
-      'Alta frecuencia calmante y antiséptica',
-      'Velo de colágeno hidratante y fotoprotección',
+      'Desmaquillado y peeling ultrasónico desincrustante',
+      'Vapor de ozono para dilatación de poros',
+      'Extracción suave no invasiva',
+      'Alta frecuencia bactericida y calmante',
+      'Velo de colágeno descongestivo y sellado dérmico',
     ],
   },
   {
     id: 'masaje-descontracturante',
     categoria: 'Masajes',
-    nombre: 'Masaje Descontracturante & Cuello',
-    tag: 'Alivio rápido',
-    duracion: '60 o 90 min',
+    nombre: 'Masaje descontracturante',
+    desc: 'Terapia manual enfocada en liberar tensión acumulada en espalda, cuello, trapecios y hombros.',
+    duracion: '60 u 90 min',
     precio: 'Desde S/ 90',
-    descripcion: 'Presión media-alta enfocada en nudos musculares de espalda, trapecio y hombros por fatiga postural o estrés.',
-    beneficios: ['Disuelve contracturas crónicas', 'Mejora la circulación y movilidad', 'Disminuye dolores de cabeza tensionales'],
+    detalles: 'Disuelve nudos miofasciales, alivia la sobrecarga postural y mejora la irrigación sanguínea en zonas críticas.',
     protocolo: [
-      'Diagnóstico postural rápido',
-      'Aplicación de toallas térmicas herbales',
-      'Terapia manual profunda sobre puntos gatillo',
-      'Estiramientos miofasciales asistidos',
-      'Aplicación de bálsamo antiinflamatorio natural',
+      'Evaluación postural preliminar',
+      'Termoterapia con compresas herbales calientes',
+      'Técnica miofascial sobre puntos gatillo',
+      'Estiramientos asistidos de cadenas musculares',
+      'Aplicación de bálsamo botánico antiinflamatorio',
     ],
   },
   {
     id: 'masaje-piedras',
     categoria: 'Masajes',
-    nombre: 'Masaje Relajante con Piedras Volcánicas',
-    tag: 'Experiencia Spa',
+    nombre: 'Masaje con piedras volcánicas',
+    desc: 'Combinación armónica de masaje sueco con termoterapia de piedras de basalto caliente para sedación muscular.',
     duracion: '75 min',
     precio: 'Desde S/ 110',
-    descripcion: 'Combinación armoniosa de masaje sueco tradicional con termoterapia de piedras de basalto caliente para una relajación profunda.',
-    beneficios: ['Alivio de fatiga y ansiedad', 'Relajación profunda del sistema nervioso', 'Efecto sedante natural'],
+    detalles: 'Efecto sedante natural sobre el sistema nervioso central, aliviando estados de fatiga crónica e insomnio.',
     protocolo: [
-      'Inhalación aromática con lavanda y bergamota',
-      'Pase de piedras calientes sobre meridianos energéticos',
-      'Maniobras fluidas envolventes de cuerpo entero',
-      'Bruma relajante de azahar y reposo tibio',
+      'Inhalación de aromaterapia de lavanda y bergamota',
+      'Deslizamiento de piedras calientes sobre meridianos energéticos',
+      'Maniobras fluidas y envolventes de cuerpo completo',
+      'Bruma calmante de azahar y reposo tibio',
     ],
   },
   {
     id: 'ritual-corporal',
     categoria: 'Corporales',
-    nombre: 'Ritual Corporal Exfoliante & Nutritivo',
-    tag: 'Piel de seda',
+    nombre: 'Ritual corporal relajante y envoltura',
+    desc: 'Exfoliación epidérmica con sales minerales + envoltura nutritiva + masaje para desconexión integral.',
     duracion: '75 min',
     precio: 'Desde S/ 140',
-    descripcion: 'Renovación epidérmica con sales minerales y envoltura corporal de fango termal o chocolate antioxidante.',
-    beneficios: ['Piel extremadamente suave y satinada', 'Activación del drenaje linfático', 'Desintoxicación celular'],
+    detalles: 'Elimina células queratinizadas, activa el drenaje linfático y satura la dermis de oligoelementos esenciales.',
     protocolo: [
-      'Gommage exfoliante con sales del mar peruano',
+      'Exfoliación con sales marinas y aceites prensados en frío',
       'Retiro con toallas calientes perfumadas',
-      'Envoltura térmica según necesidad (hidratante o détox)',
-      'Hidratación final con emulsión de almendras y karité',
+      'Envoltura térmica détox o hidro-nutritiva',
+      'Masaje final de hidratación y absorción profunda',
     ],
   },
   {
-    id: 'diagnostico-gratis',
-    categoria: 'Rituales',
-    nombre: 'Diagnóstico Facial Personalizado',
-    tag: '100% Gratuito',
+    id: 'diagnostico-facial',
+    categoria: 'Diagnóstico',
+    nombre: 'Diagnóstico de piel y biotipo cutáneo',
+    desc: 'Evaluación técnica con especialista y diseño de plan personalizado. Es tu primer paso en Origen Spa.',
     duracion: '45 min',
     precio: 'Gratis',
-    descripcion: 'Evaluación profesional de tu biotipo cutáneo con lámpara de aumento para diseñar tu propuesta ideal sin compromiso.',
-    beneficios: ['Identificación de necesidades reales', 'Recomendación experta de rutina diaria', 'Sin costo para nuevos visitantes'],
+    detalles: 'Inspección profesional de hidratación, reactividad y seborregulación para recomendar únicamente lo que tu piel requiere.',
     protocolo: [
-      'Test de hidratación y nivel de sebo',
-      'Inspección dérmica con luz polarizada',
-      'Plan personalizado con metodología IMPULSE',
-      'Entrega de guía digital de cuidados',
+      'Análisis dérmico bajo luz polarizada',
+      'Determinación de biotipo y estado cutáneo actual',
+      'Diseño de propuesta formal bajo metodología IMPULSE',
+      'Entrega de guía de recomendaciones domiciliarias',
     ],
   },
 ]
 
 export default function InteractiveServices({ onSelectTreatment }) {
-  const [categoriaActiva, setCategoriaActiva] = useState('Todos')
-  const [servicioModal, setServicioModal] = useState(null)
+  const [categoria, setCategoria] = useState('Todos')
+  const [expandidoId, setExpandidoId] = useState(null)
 
-  const filtrados = categoriaActiva === 'Todos'
-    ? CATALOGO
-    : CATALOGO.filter((s) => s.categoria === categoriaActiva)
+  const items = categoria === 'Todos'
+    ? TRATAMIENTOS
+    : TRATAMIENTOS.filter((t) => t.categoria === categoria)
+
+  function toggleExpand(id) {
+    setExpandidoId((prev) => (prev === id ? null : id))
+  }
 
   function handleSelect(nombre) {
     if (onSelectTreatment) {
@@ -121,342 +119,206 @@ export default function InteractiveServices({ onSelectTreatment }) {
   return (
     <section className="section section-line" id="servicios">
       <div className="container">
-        {/* Cabecera de la sección */}
-        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-          <span
-            style={{
-              color: 'var(--color-brand, #2d6a4f)',
-              fontSize: '0.85rem',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              display: 'block',
-              marginBottom: '0.5rem',
-            }}
-          >
-            Catálogo Interactivo de Experiencias
-          </span>
-          <h2 style={{ fontSize: 'clamp(2rem, 3.5vw, 2.5rem)', margin: '0 0 0.8rem 0' }}>
-            Tratamientos &amp; Rituales de Bienestar
-          </h2>
-          <p style={{ color: '#555', maxWidth: '620px', margin: '0 auto', fontSize: '1.05rem', lineHeight: 1.6 }}>
-            Explora nuestra carta de protocolos exclusivos. Puedes filtrar por categoría, revisar el protocolo paso a paso o pre-agendar tu sesión directamente.
-          </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '2rem' }}>
+          <div>
+            <span
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '0.8rem',
+                color: 'var(--color-accent, #C89B5C)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                fontWeight: 600,
+                display: 'block',
+                marginBottom: '0.4rem',
+              }}
+            >
+              Protocolos de Cabina
+            </span>
+            <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.3rem)' }}>Tratamientos</h2>
+          </div>
 
-          {/* Filtros por Categoría */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              flexWrap: 'wrap',
-              gap: '8px',
-              marginTop: '1.8rem',
-            }}
-          >
-            {CATEGORIAS.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategoriaActiva(cat)}
-                style={{
-                  padding: '8px 18px',
-                  borderRadius: '25px',
-                  border: categoriaActiva === cat ? '1px solid #2d6a4f' : '1px solid #ddd',
-                  background: categoriaActiva === cat ? '#2d6a4f' : '#ffffff',
-                  color: categoriaActiva === cat ? '#ffffff' : '#333333',
-                  fontWeight: 600,
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: categoriaActiva === cat ? '0 4px 10px rgba(45, 106, 79, 0.25)' : 'none',
-                }}
-              >
-                {cat}
-              </button>
-            ))}
+          {/* Filtros Editoriales Discretos */}
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+            {CATEGORIAS.map((cat) => {
+              const active = categoria === cat
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategoria(cat)}
+                  style={{
+                    background: active ? 'var(--color-bg-alt, #1F3026)' : 'transparent',
+                    border: active ? '1px solid var(--color-accent, #C89B5C)' : '1px solid var(--color-line, rgba(243, 238, 226, 0.16))',
+                    color: active ? 'var(--color-ink, #F3EEE2)' : 'var(--color-ink-muted, #B9C4B7)',
+                    padding: '0.4rem 0.9rem',
+                    borderRadius: '2px',
+                    fontSize: '0.84rem',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-body)',
+                    fontWeight: active ? 600 : 400,
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {cat}
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        {/* Grilla de Tarjetas de Servicio */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: '1.5rem',
-          }}
-        >
-          {filtrados.map((s) => (
-            <div
-              key={s.id}
-              style={{
-                background: '#ffffff',
-                borderRadius: '16px',
-                border: '1px solid #e9ecef',
-                padding: '1.6rem',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.05)',
-                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-4px)'
-                e.currentTarget.style.boxShadow = '0 12px 25px rgba(0, 0, 0, 0.1)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)'
-                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.05)'
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                  <span
-                    style={{
-                      background: 'rgba(45, 106, 79, 0.1)',
-                      color: '#2d6a4f',
-                      padding: '3px 10px',
-                      borderRadius: '12px',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {s.tag}
-                  </span>
-                  <span style={{ fontSize: '0.82rem', color: '#666', fontWeight: 500 }}>
-                    ⏱️ {s.duracion}
-                  </span>
-                </div>
-
-                <h3 style={{ fontSize: '1.25rem', margin: '0 0 0.5rem 0', color: '#1a1a1a', fontWeight: 700 }}>
-                  {s.nombre}
-                </h3>
-                <p style={{ color: '#555', fontSize: '0.9rem', lineHeight: 1.5, marginBottom: '1rem' }}>
-                  {s.descripcion}
-                </p>
-
-                {/* Beneficios clave */}
-                <div style={{ marginBottom: '1.2rem' }}>
-                  {s.beneficios.map((b, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'baseline',
-                        gap: '6px',
-                        fontSize: '0.82rem',
-                        color: '#444',
-                        marginBottom: '4px',
-                      }}
-                    >
-                      <span style={{ color: '#2d6a4f', fontWeight: 'bold' }}>✓</span>
-                      <span>{b}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Footer de la tarjeta con precio y acciones */}
-              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '1rem', marginTop: 'auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                  <div>
-                    <span style={{ display: 'block', fontSize: '0.72rem', color: '#888', textTransform: 'uppercase' }}>Inversión</span>
-                    <strong style={{ fontSize: '1.15rem', color: '#2d6a4f' }}>{s.precio}</strong>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setServicioModal(s)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#52796f',
-                      fontSize: '0.85rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    Ver protocolo 📋
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelect(s.nombre)}
+        {/* Lista Editorial Interactiva */}
+        <div className="services-list">
+          {items.map((t) => {
+            const isExpanded = expandidoId === t.id
+            return (
+              <div
+                key={t.id}
+                style={{
+                  borderBottom: '1px solid var(--color-line, rgba(243, 238, 226, 0.16))',
+                  transition: 'background 0.2s',
+                  background: isExpanded ? 'rgba(31, 48, 38, 0.4)' : 'transparent',
+                }}
+              >
+                <div
+                  className="service-row"
                   style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#2d6a4f',
-                    color: '#ffffff',
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
+                    borderBottom: 'none',
+                    padding: '1.5rem 0',
                     cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    transition: 'background 0.2s',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#1b4332' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = '#2d6a4f' }}
+                  onClick={() => toggleExpand(t.id)}
                 >
-                  <span>Reservar este tratamiento</span>
-                  <span>➔</span>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Modal de Detalle de Protocolo */}
-        {servicioModal && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 9999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(0, 0, 0, 0.6)',
-              backdropFilter: 'blur(5px)',
-              padding: '1rem',
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setServicioModal(null)
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                maxWidth: '520px',
-                background: '#ffffff',
-                borderRadius: '16px',
-                padding: '2rem',
-                position: 'relative',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setServicioModal(null)}
-                style={{
-                  position: 'absolute',
-                  top: '1rem',
-                  right: '1rem',
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '1.4rem',
-                  cursor: 'pointer',
-                  color: '#888',
-                }}
-              >
-                ×
-              </button>
-
-              <span
-                style={{
-                  background: 'rgba(45, 106, 79, 0.12)',
-                  color: '#2d6a4f',
-                  padding: '3px 10px',
-                  borderRadius: '12px',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                }}
-              >
-                {servicioModal.categoria} · {servicioModal.duracion}
-              </span>
-
-              <h3 style={{ fontSize: '1.4rem', margin: '0.6rem 0 0.4rem 0', color: '#111' }}>
-                {servicioModal.nombre}
-              </h3>
-
-              <p style={{ color: '#555', fontSize: '0.92rem', lineHeight: 1.5, marginBottom: '1.2rem' }}>
-                {servicioModal.descripcion}
-              </p>
-
-              <h4 style={{ fontSize: '0.95rem', color: '#2d6a4f', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
-                Protocolo Clínico Paso a Paso:
-              </h4>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1.5rem' }}>
-                {servicioModal.protocolo.map((paso, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      background: '#f8f9fa',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      fontSize: '0.85rem',
-                      color: '#333',
-                    }}
-                  >
+                  <div>
+                    <span className="service-name" style={{ display: 'block' }}>
+                      {t.nombre}
+                    </span>
                     <span
                       style={{
-                        width: '22px',
-                        height: '22px',
-                        borderRadius: '50%',
-                        background: '#2d6a4f',
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        flexShrink: 0,
+                        fontSize: '0.78rem',
+                        color: 'var(--color-ink-muted, #B9C4B7)',
+                        marginTop: '3px',
+                        display: 'inline-block',
                       }}
                     >
-                      {idx + 1}
+                      {t.duracion} · {t.categoria}
                     </span>
-                    <span>{paso}</span>
                   </div>
-                ))}
-              </div>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSelect(servicioModal.nombre)
-                    setServicioModal(null)
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '0.85rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#2d6a4f',
-                    color: '#ffffff',
-                    fontWeight: 700,
-                    fontSize: '0.95rem',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Solicitar este tratamiento ({servicioModal.precio})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setServicioModal(null)}
-                  style={{
-                    padding: '0.85rem 1.2rem',
-                    borderRadius: '8px',
-                    border: '1px solid #ddd',
-                    background: 'transparent',
-                    color: '#666',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Volver
-                </button>
+                  <span className="service-desc">{t.desc}</span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', justifyContent: 'flex-end' }}>
+                    <span className="service-price">{t.precio}</span>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleSelect(t.nombre)
+                      }}
+                      className="btn-primary"
+                      style={{
+                        padding: '0.45rem 1rem',
+                        fontSize: '0.82rem',
+                        borderRadius: '2px',
+                      }}
+                    >
+                      Elegir
+                    </button>
+
+                    <button
+                      type="button"
+                      aria-label="Ver detalles"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--color-ink-muted, #B9C4B7)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        style={{
+                          transform: isExpanded ? 'rotate(180deg)' : 'none',
+                          transition: 'transform 0.2s ease',
+                        }}
+                      >
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Despliegue de protocolo clínico detallado */}
+                {isExpanded && (
+                  <div
+                    style={{
+                      padding: '0 0 1.6rem 0',
+                      borderTop: '1px dashed var(--color-line, rgba(243, 238, 226, 0.12))',
+                      marginTop: '0.5rem',
+                      paddingTop: '1.2rem',
+                      display: 'grid',
+                      gridTemplateColumns: '1.2fr 1.8fr',
+                      gap: '2rem',
+                    }}
+                  >
+                    <div>
+                      <h4
+                        style={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: '1rem',
+                          fontWeight: 500,
+                          color: 'var(--color-accent, #C89B5C)',
+                          marginBottom: '0.5rem',
+                        }}
+                      >
+                        Propósito clínico
+                      </h4>
+                      <p style={{ fontSize: '0.9rem', color: 'var(--color-ink-muted, #B9C4B7)', lineHeight: 1.6 }}>
+                        {t.detalles}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h4
+                        style={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: '1rem',
+                          fontWeight: 500,
+                          color: 'var(--color-ink, #F3EEE2)',
+                          marginBottom: '0.6rem',
+                        }}
+                      >
+                        Secuencia del protocolo:
+                      </h4>
+                      <ol
+                        style={{
+                          margin: 0,
+                          paddingLeft: '1.2rem',
+                          fontSize: '0.86rem',
+                          color: 'var(--color-ink-muted, #B9C4B7)',
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        {t.protocolo.map((paso, idx) => (
+                          <li key={idx}>{paso}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-        )}
+            )
+          })}
+        </div>
       </div>
     </section>
   )

@@ -1,342 +1,319 @@
 import { useState } from 'react'
 
-const QUIZ_QUESTIONS = [
+const PREGUNTAS = [
   {
-    id: 'goal',
-    title: '1. ¿Cuál es tu objetivo principal el día de hoy?',
-    options: [
-      { id: 'facial', label: 'Cuidar mi rostro y renovar mi piel', icon: '✨', service: 'Limpieza facial profunda' },
-      { id: 'stress', label: 'Aliviar tensión muscular y estrés', icon: '💆', service: 'Masaje descontracturante' },
-      { id: 'detox', label: 'Desintoxicar y relajar todo el cuerpo', icon: '🌿', service: 'Ritual corporal relajante' },
-      { id: 'glow', label: 'Hidratación intensiva y luminosidad', icon: '💧', service: 'Facial hidratante' },
+    id: 'objetivo',
+    numero: '01',
+    titulo: '¿Cuál es la prioridad de tu visita?',
+    opciones: [
+      { id: 'facial', texto: 'Renovación e higiene cutánea profunda', servicio: 'Limpieza facial profunda con ozono' },
+      { id: 'tension', texto: 'Alivio de contracturas y tensión muscular', servicio: 'Masaje descontracturante' },
+      { id: 'relax', texto: 'Desconexión integral y reducción de estrés', servicio: 'Masaje con piedras volcánicas' },
+      { id: 'hidratacion', texto: 'Hidratación intensiva y nutrición dérmica', servicio: 'Facial hidratante intensivo' },
     ],
   },
   {
-    id: 'time',
-    title: '2. ¿De cuánto tiempo dispones para tu sesión?',
-    options: [
-      { id: 'quick', label: '45 a 60 minutos (Sesión enfocada)', icon: '⏱️' },
-      { id: 'full', label: '75 a 90 minutos (Experiencia completa)', icon: '⏳' },
-      { id: 'luxury', label: 'Más de 90 minutos (Ritual de desconexión total)', icon: '🕯️' },
+    id: 'tiempo',
+    numero: '02',
+    titulo: '¿De qué disponibilidad horaria dispones?',
+    opciones: [
+      { id: '45-60', texto: '45 a 60 minutos (Sesión enfocada)' },
+      { id: '75', texto: '75 minutos (Sesión extendida de cabina)' },
+      { id: '90+', texto: '90 minutos o más (Experiencia completa)' },
     ],
   },
   {
-    id: 'concern',
-    title: '3. ¿Qué sensación predomina en ti en este momento?',
-    options: [
-      { id: 'tired_face', label: 'Piel opaca, poros obstruidos o sequedad', icon: '🧖‍♀️', service: 'Facial hidratante' },
-      { id: 'neck_pain', label: 'Dolor o nudos en cuello, espalda y hombros', icon: '⚡', service: 'Masaje descontracturante' },
-      { id: 'mental_fatigue', label: 'Cansancio mental, necesito desconectar', icon: '🧘', service: 'Masaje relajante con aromaterapia' },
+    id: 'estado',
+    numero: '03',
+    titulo: '¿Qué molestia o condición predomina en este momento?',
+    opciones: [
+      { id: 'rostro', texto: 'Sensación de tirantez, opacidad o poros congestionados' },
+      { id: 'espalda', texto: 'Sobrecarga o dolor punzante en cuello y espalda alta' },
+      { id: 'cansancio', texto: 'Fatiga generalizada física y mental' },
     ],
   },
 ]
 
-const RECOMMENDATIONS = {
+const RESULTADOS = {
   facial: {
-    name: 'Facial Hidratante & Limpieza Profunda',
-    category: 'Cuidado Facial',
-    duration: '60 min',
-    price: 'S/ 80.00',
-    why: 'Tu piel necesita oxigenación y balance hidrolipídico para recuperar luminosidad natural.',
-    included: ['Vapor de ozono', 'Exfoliación enzimática', 'Mascarilla de colágeno', 'Masaje facial estimulante'],
+    nombre: 'Limpieza facial profunda con ozono',
+    categoria: 'Cuidado Facial',
+    duracion: '60 min',
+    precio: 'Desde S/ 95',
+    diagnostico: 'Recomendamos iniciar con una higiene técnica profunda para desobstruir poros, oxigenar el tejido y preparar la piel antes de cualquier nutrición intensiva.',
   },
-  stress: {
-    name: 'Masaje Descontracturante Profundo',
-    category: 'Terapia Muscular',
-    duration: '60 o 90 min',
-    price: 'S/ 90.00',
-    why: 'Ideal para disolver contracturas acumuladas por postura y estrés en cervicales y espalda.',
-    included: ['Aceites esenciales de romero y lavanda', 'Técnica miofascial', 'Puntos gatillo', 'Toallas térmicas'],
+  tension: {
+    nombre: 'Masaje descontracturante',
+    categoria: 'Terapia Muscular',
+    duracion: '60 u 90 min',
+    precio: 'Desde S/ 90',
+    diagnostico: 'Tu cuadro sugiere tensión miofascial localizada. El protocolo de presión profunda y puntos gatillo ayudará a distender la musculatura paravertebral y cervical.',
   },
-  detox: {
-    name: 'Ritual Corporal Relajante & Envoltura',
-    category: 'Bienestar Holístico',
-    duration: '75 min',
-    price: 'S/ 140.00',
-    why: 'Exfolia células muertas, activa el drenaje linfático y aporta nutrición profunda.',
-    included: ['Sales minerales del mar', 'Envoltura hidratante', 'Ducha de sensaciones', 'Masaje final'],
+  relax: {
+    nombre: 'Masaje con piedras volcánicas',
+    categoria: 'Sedación & Termoterapia',
+    duracion: '75 min',
+    precio: 'Desde S/ 110',
+    diagnostico: 'La termoterapia de basalto caliente actúa directamente sobre el sistema nervioso periférico, reduciendo los niveles de cortisol y restaurando el equilibrio físico.',
   },
-  default: {
-    name: 'Diagnóstico Integral y Facial Personalizado',
-    category: 'Primer Contacto',
-    duration: '45 min',
-    price: 'Gratis (Diagnóstico)',
-    why: 'Analizaremos tu biotipo cutáneo para definir el protocolo idóneo sin costo en tu primera visita.',
-    included: ['Lámpara de Wood', 'Evaluación de elasticidad', 'Guía de cuidados para casa', 'Asesoría 1 a 1'],
+  hidratacion: {
+    nombre: 'Facial hidratante intensivo',
+    categoria: 'Hidronutrición',
+    duracion: '60 min',
+    precio: 'Desde S/ 80',
+    diagnostico: 'La barrera dérmica requiere reposición hídrica inmediata. Este tratamiento restablece los factores naturales de hidratación y calma la reactividad.',
   },
 }
 
 export default function SpaQuizWidget({ onSelectTreatment }) {
-  const [step, setStep] = useState(0)
-  const [answers, setAnswers] = useState({})
-  const [result, setResult] = useState(null)
+  const [paso, setPaso] = useState(0)
+  const [respuestas, setRespuestas] = useState({})
+  const [resultado, setResultado] = useState(null)
 
-  function handleOptionSelect(questionId, option) {
-    const updated = { ...answers, [questionId]: option }
-    setAnswers(updated)
+  function seleccionar(opcion) {
+    const actualizada = { ...respuestas, [PREGUNTAS[paso].id]: opcion }
+    setRespuestas(actualizada)
 
-    if (step < QUIZ_QUESTIONS.length - 1) {
-      setStep(step + 1)
+    if (paso < PREGUNTAS.length - 1) {
+      setPaso(paso + 1)
     } else {
-      // Calcular recomendación
-      const goalChoice = updated.goal?.id
-      const rec = RECOMMENDATIONS[goalChoice] || RECOMMENDATIONS.default
-      setResult(rec)
+      const objetivo = actualizada.objetivo?.id || 'facial'
+      setResultado(RESULTADOS[objetivo] || RESULTADOS.facial)
     }
   }
 
-  function handleReset() {
-    setStep(0)
-    setAnswers({})
-    setResult(null)
+  function reiniciar() {
+    setPaso(0)
+    setRespuestas({})
+    setResultado(null)
   }
 
-  function handleApplyResult() {
-    if (result && onSelectTreatment) {
-      onSelectTreatment(result.name)
+  function aplicar() {
+    if (resultado && onSelectTreatment) {
+      onSelectTreatment(resultado.nombre)
     }
   }
 
   return (
     <div
       style={{
-        background: 'linear-gradient(145deg, #1b3a2b 0%, #0e2017 100%)',
-        borderRadius: '20px',
-        border: '1px solid rgba(82, 183, 136, 0.35)',
-        padding: '2.5rem 2rem',
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.35)',
-        color: '#edf2f4',
-        margin: '2rem 0',
+        background: 'var(--color-bg-alt, #1F3026)',
+        border: '1px solid var(--color-line, rgba(243, 238, 226, 0.16))',
+        borderRadius: '4px',
+        padding: 'clamp(2rem, 5vw, 3rem)',
+        color: 'var(--color-ink, #F3EEE2)',
+        maxWidth: '860px',
+        margin: '0 auto',
       }}
     >
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
         <span
           style={{
-            display: 'inline-block',
-            padding: '4px 12px',
-            background: 'rgba(82, 183, 136, 0.2)',
-            border: '1px solid #52b788',
-            borderRadius: '20px',
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            color: '#b7d2b9',
+            fontFamily: 'var(--font-body)',
+            fontSize: '0.78rem',
+            color: 'var(--color-accent, #C89B5C)',
             textTransform: 'uppercase',
             letterSpacing: '0.08em',
-            marginBottom: '0.6rem',
+            fontWeight: 600,
+            display: 'block',
+            marginBottom: '0.4rem',
           }}
         >
-          Diagnóstico Exprés Interactivo
+          Orientación Personalizada
         </span>
-        <h3 style={{ fontSize: 'clamp(1.4rem, 2.5vw, 1.8rem)', margin: '0 0 0.5rem 0', color: '#ffffff' }}>
-          ¿Qué tratamiento necesita tu cuerpo hoy?
+        <h3 style={{ fontSize: 'clamp(1.5rem, 2.5vw, 1.9rem)', margin: '0 0 0.5rem 0' }}>
+          ¿Qué tratamiento requiere tu piel o bienestar?
         </h3>
-        <p style={{ margin: 0, color: '#b7d2b9', fontSize: '0.95rem', maxWidth: '500px', marginInline: 'auto' }}>
-          Responde 3 preguntas rápidas y el sistema calculará tu experiencia ideal con recomendación de protocolo.
+        <p style={{ color: 'var(--color-ink-muted, #B9C4B7)', fontSize: '0.92rem', margin: '0 auto' }}>
+          Responde 3 consultas técnicas breves para calcular la recomendación óptima antes de tu cita presencial.
         </p>
       </div>
 
-      {!result ? (
+      {!resultado ? (
         <div>
-          {/* Progress bar */}
+          {/* Indicador de progreso */}
           <div
             style={{
               display: 'flex',
-              alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px',
-              marginBottom: '1.8rem',
+              gap: '12px',
+              marginBottom: '2rem',
+              fontSize: '0.8rem',
+              color: 'var(--color-ink-muted, #B9C4B7)',
+              fontFamily: 'var(--font-body)',
             }}
           >
-            {QUIZ_QUESTIONS.map((_, idx) => (
-              <div
-                key={idx}
+            {PREGUNTAS.map((p, i) => (
+              <span
+                key={p.id}
                 style={{
-                  width: idx === step ? '40px' : '18px',
-                  height: '6px',
-                  borderRadius: '3px',
-                  background: idx <= step ? '#52b788' : 'rgba(255, 255, 255, 0.15)',
-                  transition: 'all 0.3s ease',
+                  color: i === paso ? 'var(--color-accent, #C89B5C)' : i < paso ? 'var(--color-ink, #F3EEE2)' : 'var(--color-ink-muted, #B9C4B7)',
+                  fontWeight: i === paso ? 600 : 400,
                 }}
-              />
+              >
+                Paso {p.numero} {i < PREGUNTAS.length - 1 ? '—' : ''}
+              </span>
             ))}
           </div>
 
-          <h4 style={{ fontSize: '1.15rem', color: '#f8f9fa', textAlign: 'center', marginBottom: '1.2rem' }}>
-            {QUIZ_QUESTIONS[step].title}
+          <h4
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '1.25rem',
+              fontWeight: 500,
+              textAlign: 'center',
+              marginBottom: '1.5rem',
+              color: 'var(--color-ink, #F3EEE2)',
+            }}
+          >
+            {PREGUNTAS[paso].titulo}
           </h4>
 
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
               gap: '12px',
-              maxWidth: '800px',
+              maxWidth: '720px',
               margin: '0 auto',
             }}
           >
-            {QUIZ_QUESTIONS[step].options.map((option) => (
+            {PREGUNTAS[paso].opciones.map((op, idx) => (
               <button
-                key={option.id}
+                key={idx}
                 type="button"
-                onClick={() => handleOptionSelect(QUIZ_QUESTIONS[step].id, option)}
+                onClick={() => seleccionar(op)}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '1.1rem 1.2rem',
-                  borderRadius: '12px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(82, 183, 136, 0.25)',
-                  color: '#ffffff',
-                  fontSize: '0.92rem',
-                  fontWeight: 600,
+                  padding: '1.1rem 1.25rem',
+                  borderRadius: '3px',
+                  background: 'var(--color-bg, #16231C)',
+                  border: '1px solid var(--color-line, rgba(243, 238, 226, 0.16))',
+                  color: 'var(--color-ink, #F3EEE2)',
+                  fontSize: '0.9rem',
+                  fontFamily: 'var(--font-body)',
                   textAlign: 'left',
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                  transition: 'border-color 0.2s, background 0.2s',
+                  lineHeight: 1.4,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(82, 183, 136, 0.18)'
-                  e.currentTarget.style.borderColor = '#52b788'
-                  e.currentTarget.style.transform = 'translateY(-2px)'
+                  e.currentTarget.style.borderColor = 'var(--color-accent, #C89B5C)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.currentTarget.style.borderColor = 'rgba(82, 183, 136, 0.25)'
-                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.borderColor = 'var(--color-line, rgba(243, 238, 226, 0.16))'
                 }}
               >
-                <span style={{ fontSize: '1.5rem' }}>{option.icon}</span>
-                <span>{option.label}</span>
+                <span style={{ color: 'var(--color-accent, #C89B5C)', marginRight: '8px', fontSize: '0.8rem' }}>
+                  {String.fromCharCode(65 + idx)}.
+                </span>
+                <span>{op.texto}</span>
               </button>
             ))}
           </div>
 
-          {step > 0 && (
+          {paso > 0 && (
             <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
               <button
                 type="button"
-                onClick={() => setStep(step - 1)}
+                onClick={() => setPaso(paso - 1)}
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#95d5b2',
-                  fontSize: '0.85rem',
+                  color: 'var(--color-ink-muted, #B9C4B7)',
+                  fontSize: '0.82rem',
                   cursor: 'pointer',
                   textDecoration: 'underline',
+                  fontFamily: 'var(--font-body)',
                 }}
               >
-                ← Pregunta anterior
+                ← Volver a la consulta anterior
               </button>
             </div>
           )}
         </div>
       ) : (
-        /* Resultado */
+        /* Resultado Sobrio */
         <div
           style={{
-            maxWidth: '650px',
+            maxWidth: '680px',
             margin: '0 auto',
-            background: 'rgba(0, 0, 0, 0.3)',
-            borderRadius: '16px',
+            background: 'var(--color-bg, #16231C)',
+            border: '1px solid var(--color-line, rgba(243, 238, 226, 0.2))',
+            borderRadius: '4px',
             padding: '2rem',
-            border: '1px solid #52b788',
-            textAlign: 'center',
           }}
         >
-          <span style={{ fontSize: '2.5rem' }}>🌿</span>
-          <div style={{ color: '#74c69d', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', marginTop: '6px' }}>
-            {result.category} · Recomendación Personalizada
-          </div>
-          <h4 style={{ fontSize: '1.5rem', color: '#ffffff', margin: '0.4rem 0 0.8rem 0' }}>
-            {result.name}
+          <span
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.75rem',
+              color: 'var(--color-accent, #C89B5C)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              fontWeight: 600,
+              display: 'block',
+              marginBottom: '0.4rem',
+            }}
+          >
+            Protocolo Sugerido · {resultado.categoria}
+          </span>
+
+          <h4
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '1.5rem',
+              fontWeight: 500,
+              color: 'var(--color-ink, #F3EEE2)',
+              margin: '0 0 0.8rem 0',
+            }}
+          >
+            {resultado.nombre}
           </h4>
-          <p style={{ color: '#d8f3dc', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '1.2rem' }}>
-            {result.why}
+
+          <p style={{ color: 'var(--color-ink-muted, #B9C4B7)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+            {resultado.diagnostico}
           </p>
 
           <div
             style={{
               display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              gap: '8px',
-              marginBottom: '1.5rem',
+              gap: '2rem',
+              padding: '0.9rem 0',
+              borderTop: '1px solid var(--color-line, rgba(243, 238, 226, 0.12))',
+              borderBottom: '1px solid var(--color-line, rgba(243, 238, 226, 0.12))',
+              marginBottom: '1.8rem',
+              fontSize: '0.88rem',
             }}
           >
-            {result.included.map((item, i) => (
-              <span
-                key={i}
-                style={{
-                  background: 'rgba(82, 183, 136, 0.15)',
-                  border: '1px solid rgba(82, 183, 136, 0.4)',
-                  padding: '4px 10px',
-                  borderRadius: '12px',
-                  fontSize: '0.8rem',
-                  color: '#b7d2b9',
-                }}
-              >
-                ✓ {item}
+            <div>
+              <span style={{ color: 'var(--color-ink-muted, #B9C4B7)', display: 'block', fontSize: '0.74rem', textTransform: 'uppercase' }}>
+                Duración de cabina
               </span>
-            ))}
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '20px',
-              padding: '1rem',
-              background: 'rgba(255, 255, 255, 0.05)',
-              borderRadius: '10px',
-              marginBottom: '1.5rem',
-            }}
-          >
-            <div>
-              <span style={{ display: 'block', fontSize: '0.75rem', color: '#95d5b2' }}>DURACIÓN</span>
-              <strong style={{ fontSize: '1.1rem', color: '#fff' }}>{result.duration}</strong>
+              <strong style={{ color: 'var(--color-ink, #F3EEE2)' }}>{resultado.duracion}</strong>
             </div>
-            <div style={{ width: '1px', height: '30px', background: 'rgba(255,255,255,0.15)' }} />
             <div>
-              <span style={{ display: 'block', fontSize: '0.75rem', color: '#95d5b2' }}>PRECIO ESTIMADO</span>
-              <strong style={{ fontSize: '1.1rem', color: '#52b788' }}>{result.price}</strong>
+              <span style={{ color: 'var(--color-ink-muted, #B9C4B7)', display: 'block', fontSize: '0.74rem', textTransform: 'uppercase' }}>
+                Inversión estimada
+              </span>
+              <strong style={{ color: 'var(--color-clay, #D9AFA0)' }}>{resultado.precio}</strong>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={handleApplyResult}
-              style={{
-                padding: '0.85rem 1.6rem',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
-                borderTop: '1px solid #52b788',
-                color: '#ffffff',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                cursor: 'pointer',
-                boxShadow: '0 4px 14px rgba(45, 106, 79, 0.5)',
-              }}
+              onClick={aplicar}
+              className="btn-primary"
             >
-              🎯 Solicitar diagnóstico con este tratamiento ➔
+              Solicitar diagnóstico con este tratamiento
             </button>
             <button
               type="button"
-              onClick={handleReset}
-              style={{
-                padding: '0.85rem 1.2rem',
-                borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                background: 'transparent',
-                color: '#d8f3dc',
-                fontSize: '0.9rem',
-                cursor: 'pointer',
-              }}
+              onClick={reiniciar}
+              className="btn-ghost"
+              style={{ fontSize: '0.88rem', padding: '0.8rem 1.2rem' }}
             >
-              🔄 Repetir test
+              Reiniciar consulta
             </button>
           </div>
         </div>

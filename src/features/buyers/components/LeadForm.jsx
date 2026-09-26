@@ -155,20 +155,15 @@ export default function LeadForm({ selectedTreatment = '' }) {
           style={{
             margin: '0.4rem 0 1rem 0',
             padding: '0.6rem 0.9rem',
-            background: 'rgba(45, 106, 79, 0.12)',
-            border: '1px solid #2d6a4f',
-            borderRadius: '8px',
+            background: 'rgba(27, 42, 33, 0.06)',
+            border: '1px solid var(--color-line-contrast, rgba(27, 42, 33, 0.18))',
+            borderRadius: '2px',
             fontSize: '0.85rem',
-            color: '#1b4332',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
+            color: 'var(--color-ink-on-contrast, #1B2A21)',
+            fontFamily: 'var(--font-body)',
           }}
         >
-          <span>🎯</span>
-          <span>
-            Tratamiento seleccionado: <strong>{selectedTreatment}</strong>
-          </span>
+          Tratamiento seleccionado: <strong>{selectedTreatment}</strong>
         </div>
       )}
 

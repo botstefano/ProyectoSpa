@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocation, Link, useNavigate } from 'react-router-dom'
 import { useStaffAuth } from '../../features/auth/StaffAuthContext'
 import { obtenerNotificacionesPendientes } from '../../lib/notificaciones'
+import BrandLogo from './BrandLogo'
 
 export default function StaffUniversalNav({ activePhase = '' }) {
   const { staffUser, logout } = useStaffAuth()
@@ -35,23 +36,17 @@ export default function StaffUniversalNav({ activePhase = '' }) {
     {
       id: 'leads',
       label: 'Fase 2: Leads',
-      sub: 'Negociación y Chatbot',
       path: '/staff/leads',
-      icon: '👥',
     },
     {
       id: 'payers',
       label: 'Fase 3: Payers',
-      sub: 'Pagos y Activación',
       path: '/staff/payers',
-      icon: '💳',
     },
     {
       id: 'customers',
       label: 'Fase 4: Customers',
-      sub: 'Atención y Fidelización',
       path: '/staff/customers',
-      icon: '🌟',
     },
   ]
 
@@ -61,91 +56,33 @@ export default function StaffUniversalNav({ activePhase = '' }) {
         position: 'sticky',
         top: 0,
         zIndex: 1000,
-        backgroundColor: '#0c1a13',
-        borderBottom: '1px solid rgba(82, 183, 136, 0.25)',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-        padding: '0 1.5rem',
-        backdropFilter: 'blur(10px)',
+        backgroundColor: 'var(--color-bg, #16231C)',
+        borderBottom: '1px solid var(--color-line, rgba(243, 238, 226, 0.16))',
+        padding: '0 clamp(1.25rem, 4vw, 3rem)',
       }}
     >
       <div
         style={{
-          maxWidth: '1440px',
+          maxWidth: 'var(--content-max, 1120px)',
           margin: '0 auto',
-          height: '68px',
+          height: '66px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '1rem',
         }}
       >
-        {/* Brand & Kicker */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link
-            to="/"
-            style={{
-              textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
-                color: '#95d5b2',
-                fontSize: '1.2rem',
-                border: '1px solid rgba(82, 183, 136, 0.4)',
-              }}
-            >
-              🌿
-            </span>
-            <div>
-              <span
-                style={{
-                  display: 'block',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  fontSize: '1rem',
-                  letterSpacing: '0.02em',
-                }}
-              >
-                Origen Spa &amp; Bienestar
-              </span>
-              <span
-                style={{
-                  display: 'block',
-                  color: '#74c69d',
-                  fontSize: '0.72rem',
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Panel Universal Staff · IMPULSE
-              </span>
-            </div>
-          </Link>
-        </div>
+        {/* Brand & Subtitle con Logo Oficial */}
+        <BrandLogo href="/staff/leads" subtitle="Sistema de Gestión · IMPULSE" />
 
-        {/* Phase Navigation Tabs */}
+        {/* Phase Navigation Tabs - Estilo sobrio y formal */}
         <nav
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            background: 'rgba(255, 255, 255, 0.04)',
-            padding: '4px',
-            borderRadius: '10px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            gap: '8px',
           }}
-          aria-label="Navegación entre fases del Staff"
+          aria-label="Fases del sistema"
         >
           {navItems.map((item) => {
             const isActive = currentPath === item.path || activePhase === item.id
@@ -154,33 +91,32 @@ export default function StaffUniversalNav({ activePhase = '' }) {
                 key={item.id}
                 to={item.path}
                 style={{
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 14px',
-                  borderRadius: '7px',
+                  gap: '6px',
+                  padding: '7px 14px',
+                  borderRadius: '3px',
                   textDecoration: 'none',
                   fontSize: '0.86rem',
-                  fontWeight: isActive ? 700 : 500,
-                  color: isActive ? '#ffffff' : '#b7d2b9',
-                  background: isActive
-                    ? 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)'
-                    : 'transparent',
-                  border: isActive ? '1px solid #52b788' : '1px solid transparent',
-                  boxShadow: isActive ? '0 2px 8px rgba(45, 106, 79, 0.35)' : 'none',
-                  transition: 'all 0.15s ease',
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: isActive ? 600 : 500,
+                  color: isActive ? 'var(--color-ink, #F3EEE2)' : 'var(--color-ink-muted, #B9C4B7)',
+                  background: isActive ? 'var(--color-bg-alt, #1F3026)' : 'transparent',
+                  border: isActive
+                    ? '1px solid var(--color-accent, #C89B5C)'
+                    : '1px solid transparent',
+                  transition: 'all 0.2s ease',
                 }}
               >
-                <span>{item.icon}</span>
                 <span>{item.label}</span>
                 {item.id === 'leads' && notificationCount > 0 && (
                   <span
                     style={{
-                      background: '#e04c4c',
-                      color: '#ffffff',
-                      fontSize: '0.7rem',
+                      background: 'var(--color-accent, #C89B5C)',
+                      color: 'var(--color-ink-on-contrast, #1B2A21)',
+                      fontSize: '0.68rem',
                       fontWeight: 700,
-                      padding: '1px 6px',
+                      padding: '1px 5px',
                       borderRadius: '10px',
                     }}
                   >
@@ -192,32 +128,28 @@ export default function StaffUniversalNav({ activePhase = '' }) {
           })}
         </nav>
 
-        {/* Right Tools: Link a Buyer + Usuario Staff */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Ir al sitio Buyer */}
+        {/* Controles de Staff */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <Link
             to="/"
-            title="Ir a la página de clientes (Buyer)"
+            title="Volver a la landing pública de clientes"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 12px',
-              borderRadius: '8px',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              background: 'rgba(255, 255, 255, 0.05)',
-              color: '#d8f3dc',
+              padding: '6px 12px',
+              borderRadius: '3px',
+              border: '1px solid var(--color-line, rgba(243, 238, 226, 0.16))',
+              background: 'transparent',
+              color: 'var(--color-ink-muted, #B9C4B7)',
               textDecoration: 'none',
               fontSize: '0.8rem',
-              fontWeight: 600,
-              transition: 'background 0.2s',
+              fontFamily: 'var(--font-body)',
+              fontWeight: 500,
+              transition: 'color 0.2s, border-color 0.2s',
             }}
           >
-            <span>🌐</span>
-            <span>Ver Sitio Clientes</span>
+            Vista Clientes
           </Link>
 
-          {/* User profile dropdown */}
+          {/* Menú de usuario staff */}
           <div style={{ position: 'relative' }}>
             <button
               type="button"
@@ -227,32 +159,27 @@ export default function StaffUniversalNav({ activePhase = '' }) {
                 alignItems: 'center',
                 gap: '8px',
                 padding: '6px 12px',
-                borderRadius: '8px',
-                border: '1px solid rgba(82, 183, 136, 0.3)',
-                background: 'rgba(45, 106, 79, 0.25)',
-                color: '#ffffff',
+                borderRadius: '3px',
+                border: '1px solid var(--color-line, rgba(243, 238, 226, 0.16))',
+                background: 'var(--color-bg-alt, #1F3026)',
+                color: 'var(--color-ink, #F3EEE2)',
                 fontSize: '0.84rem',
+                fontFamily: 'var(--font-body)',
                 cursor: 'pointer',
               }}
             >
               <span
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: '6px',
+                  height: '6px',
                   borderRadius: '50%',
-                  background: '#52b788',
-                  color: '#0c1a13',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '0.75rem',
+                  background: 'var(--color-accent, #C89B5C)',
                 }}
-              >
-                {(staffUser?.name || 'S').charAt(0).toUpperCase()}
-              </span>
+              />
               <span style={{ fontWeight: 600 }}>{staffUser?.name || 'Staff'}</span>
-              <span style={{ fontSize: '0.7rem', color: '#95d5b2' }}>▼</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
             </button>
 
             {userMenuOpen && (
@@ -261,91 +188,84 @@ export default function StaffUniversalNav({ activePhase = '' }) {
                   position: 'absolute',
                   right: 0,
                   top: '115%',
-                  width: '230px',
-                  background: '#132a1e',
-                  border: '1px solid rgba(82, 183, 136, 0.4)',
-                  borderRadius: '10px',
-                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
-                  padding: '0.6rem',
+                  width: '210px',
+                  background: 'var(--color-bg-alt, #1F3026)',
+                  border: '1px solid var(--color-line, rgba(243, 238, 226, 0.16))',
+                  borderRadius: '3px',
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.45)',
+                  padding: '0.5rem 0',
                   zIndex: 1001,
                 }}
               >
-                <div style={{ padding: '0.5rem 0.6rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <div style={{ color: '#ffffff', fontWeight: 600, fontSize: '0.85rem' }}>
+                <div style={{ padding: '0.5rem 0.9rem', borderBottom: '1px solid var(--color-line, rgba(243, 238, 226, 0.1))' }}>
+                  <div style={{ color: 'var(--color-ink, #F3EEE2)', fontWeight: 600, fontSize: '0.85rem' }}>
                     {staffUser?.name || 'Usuario Staff'}
                   </div>
-                  <div style={{ color: '#74c69d', fontSize: '0.75rem' }}>
+                  <div style={{ color: 'var(--color-ink-muted, #B9C4B7)', fontSize: '0.74rem' }}>
                     {staffUser?.role || 'Staff Origen Spa'}
                   </div>
                 </div>
 
-                <div style={{ padding: '0.4rem 0' }}>
+                <div style={{ padding: '0.3rem 0' }}>
                   <Link
                     to="/staff/leads"
                     onClick={() => setUserMenuOpen(false)}
                     style={{
                       display: 'block',
-                      padding: '0.4rem 0.6rem',
-                      color: '#b7d2b9',
+                      padding: '0.45rem 0.9rem',
+                      color: 'var(--color-ink, #F3EEE2)',
                       textDecoration: 'none',
                       fontSize: '0.82rem',
-                      borderRadius: '5px',
                     }}
                   >
-                    👥 Panel de Leads (Fase 2)
+                    Fase 2: Leads &amp; Negociación
                   </Link>
                   <Link
                     to="/staff/payers"
                     onClick={() => setUserMenuOpen(false)}
                     style={{
                       display: 'block',
-                      padding: '0.4rem 0.6rem',
-                      color: '#b7d2b9',
+                      padding: '0.45rem 0.9rem',
+                      color: 'var(--color-ink, #F3EEE2)',
                       textDecoration: 'none',
                       fontSize: '0.82rem',
-                      borderRadius: '5px',
                     }}
                   >
-                    💳 Gestión de Pagos (Fase 3)
+                    Fase 3: Payers &amp; Pagos
                   </Link>
                   <Link
                     to="/staff/customers"
                     onClick={() => setUserMenuOpen(false)}
                     style={{
                       display: 'block',
-                      padding: '0.4rem 0.6rem',
-                      color: '#b7d2b9',
+                      padding: '0.45rem 0.9rem',
+                      color: 'var(--color-ink, #F3EEE2)',
                       textDecoration: 'none',
                       fontSize: '0.82rem',
-                      borderRadius: '5px',
                     }}
                   >
-                    🌟 Atención a Clientes (Fase 4)
+                    Fase 4: Customers &amp; Atención
                   </Link>
                 </div>
 
-                <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '0.4rem' }}>
+                <div style={{ borderTop: '1px solid var(--color-line, rgba(243, 238, 226, 0.1))', paddingTop: '0.3rem' }}>
                   <button
                     type="button"
                     onClick={handleLogout}
                     style={{
                       width: '100%',
                       textAlign: 'left',
-                      padding: '0.5rem 0.6rem',
+                      padding: '0.5rem 0.9rem',
                       background: 'transparent',
                       border: 'none',
-                      color: '#ff8a8a',
+                      color: 'var(--color-clay, #D9AFA0)',
                       fontSize: '0.82rem',
-                      fontWeight: 600,
+                      fontWeight: 500,
                       cursor: 'pointer',
-                      borderRadius: '5px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
+                      fontFamily: 'var(--font-body)',
                     }}
                   >
-                    <span>🚪</span>
-                    <span>Cerrar sesión de Staff</span>
+                    Cerrar sesión
                   </button>
                 </div>
               </div>
