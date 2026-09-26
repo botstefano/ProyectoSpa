@@ -255,7 +255,9 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
     
     // Construir el array de mensajes para Mistral
     // Transformar el historial de conversación del formato español al formato de Mistral
-    const transformedHistory = conversationHistory.map(msg => ({
+    // Limitar a los últimos 10 mensajes para evitar sobrecargar la API
+    const recentHistory = conversationHistory.slice(-10)
+    const transformedHistory = recentHistory.map(msg => ({
       role: msg.rol || msg.role,
       content: msg.mensaje || msg.content
     }))
