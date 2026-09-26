@@ -53,10 +53,10 @@ export async function obtenerLeadsParaPago() {
         const score = det?.lead_score ?? (tieneChatbotAceptada ? 50 : 0)
         const propuestaAceptada = det?.propuesta_aceptada || tieneChatbotAceptada || false
 
-        // Estado del contacto: admitir 'lead' o 'buyer' que ya aceptó propuesta
+        // Estado del contacto: admitir 'lead', 'payer' o 'buyer' que ya aceptó propuesta
         const estadoObj = Array.isArray(lead.estado_contacto) ? lead.estado_contacto[0] : lead.estado_contacto
         const estadoNombre = estadoObj?.nombre_estado || ''
-        const estadoValido = estadoNombre === 'lead' || (estadoNombre === 'buyer' && propuestaAceptada)
+        const estadoValido = estadoNombre === 'lead' || estadoNombre === 'payer' || (estadoNombre === 'buyer' && propuestaAceptada)
 
         return estadoValido && score >= 50 && propuestaAceptada
       })
@@ -232,17 +232,40 @@ export async function procesarPagoCompleto(idContacto, datosPago) {
 export async function obtenerDetallesPago(idContacto) {
   return safeSupabaseOperation(async (client) => {
     try {
-      const { data, error } = await client
+      // 1. Consultar pago_detalle primero
+      const { data: pagoDetalle } = await client
         .from('pago_detalle')
         .select('*')
         .eq('id_contacto', idContacto)
         .maybeSingle()
 
-      if (error) {
-        throw handleSupabaseError(error, 'obtener detalles de pago')
+      if (pagoDetalle && (pagoDetalle.estado_pago === 'confirmado' || pagoDetalle.estado_pago === 'pagado')) {
+        return pagoDetalle
       }
 
-      return data
+      // 2. Si no hay en pago_detalle o no está confirmado, consultar pago_simulado completado
+      const { data: pagoSimulado } = await client
+        .from('pago_simulado')
+        .select('*')
+        .eq('id_contacto', idContacto)
+        .eq('estado_pago', 'completado')
+        .order('fecha_completado', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (pagoSimulado) {
+        return {
+          id_contacto: idContacto,
+          estado_pago: 'confirmado',
+          fecha_pago: pagoSimulado.fecha_completado,
+          servicio_contratado: pagoSimulado.servicio_contratado,
+          monto_total: Number(pagoSimulado.monto_total),
+          metodo_pago: pagoSimulado.metodo_pago_elegido || 'transferencia',
+          referencia: pagoSimulado.datos_pago?.operacion || pagoSimulado.token_pago
+        }
+      }
+
+      return pagoDetalle || null
     } catch (error) {
       logger.error('payersApi', 'Error obteniendo detalles de pago', { idContacto, error })
       return null

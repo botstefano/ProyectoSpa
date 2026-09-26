@@ -208,12 +208,18 @@ export default function PayersStaffPage() {
   const [sendingPaymentEmail, setSendingPaymentEmail] = useState(false)
 
   const confirmedTotal = useMemo(
-    () => history.filter((item) => item.resultado === 'Confirmado').reduce((sum, item) => sum + item.monto, 0),
+    () => history.filter((item) => (item.resultado || '').toLowerCase() === 'confirmado').reduce((sum, item) => sum + item.monto, 0),
     [history],
   )
 
+  const isConfirmed = Boolean(
+    (paymentDetails && ((paymentDetails.estado_pago || '').toLowerCase() === 'confirmado' || (paymentDetails.estado_pago || '').toLowerCase() === 'pagado')) ||
+    history.some(item => (item.resultado || '').toLowerCase() === 'confirmado') ||
+    (schedule.length > 0 && schedule[0].estado === 'Pagada')
+  )
+
   const balance = service ? Math.max(service.total - confirmedTotal, 0) : 0
-  const initialPaid = schedule.length > 0 && schedule[0].estado === 'Pagada'
+  const initialPaid = isConfirmed
   const serviceStatus = initialPaid ? 'Servicio activado' : 'Por activar'
   const paymentStatus = initialPaid ? 'Pago confirmado' : 'Pago pendiente'
 
@@ -235,32 +241,45 @@ export default function PayersStaffPage() {
 
     try {
       const cronograma = await crearCronogramaPagos(lead.id_contacto, clientService.nombre, clientService.total, 3)
-      setSchedule(cronograma.map((item, index) => ({
-        id: index + 1,
-        concepto: item.concepto,
-        monto: item.monto,
-        vencimiento: new Date(item.fecha_vencimiento).toLocaleDateString('es-ES'),
-        estado: item.estado === 'pendiente' ? 'Pendiente' : item.estado
-      })))
 
       const detalles = await obtenerDetallesPago(lead.id_contacto)
-      if (detalles) {
+      const isPaid = detalles && ((detalles.estado_pago || '').toLowerCase() === 'confirmado' || (detalles.estado_pago || '').toLowerCase() === 'pagado')
+
+      if (isPaid) {
         setPaymentDetails(detalles)
         setSource('supabase')
-        if (detalles.fecha_pago) {
-          setHistory([{
-            id: detalles.id_contacto || Date.now(),
-            fecha: new Date(detalles.fecha_pago).toLocaleDateString('es-ES'),
-            metodo: detalles.metodo_pago || 'Confirmado',
-            monto: Number(detalles.monto_total) || clientService.total,
-            resultado: (detalles.estado_pago || '').toLowerCase() === 'confirmado' ? 'Confirmado' : 'Pendiente',
-            referencia: 'Pago registrado en Supabase'
-          }])
-        } else {
-          setHistory([])
-        }
+        const montoPagado = Number(detalles.monto_total) || clientService.total
+
+        let restante = montoPagado
+        setSchedule(cronograma.map((item, index) => {
+          const pagada = restante >= item.monto || (index === 0 && restante > 0)
+          if (pagada) restante = Math.max(0, restante - item.monto)
+          return {
+            id: index + 1,
+            concepto: item.concepto,
+            monto: item.monto,
+            vencimiento: new Date(item.fecha_vencimiento).toLocaleDateString('es-ES'),
+            estado: pagada ? 'Pagada' : (item.estado === 'pendiente' ? 'Pendiente' : item.estado)
+          }
+        }))
+
+        setHistory([{
+          id: detalles.id_pago_simulado || detalles.id_contacto || Date.now(),
+          fecha: new Date(detalles.fecha_pago || Date.now()).toLocaleDateString('es-ES'),
+          metodo: (detalles.metodo_pago || 'Transferencia').toUpperCase(),
+          monto: montoPagado,
+          resultado: 'Confirmado',
+          referencia: detalles.referencia || 'Pago verificado online'
+        }])
       } else {
-        setPaymentDetails(null)
+        setPaymentDetails(detalles)
+        setSchedule(cronograma.map((item, index) => ({
+          id: index + 1,
+          concepto: item.concepto,
+          monto: item.monto,
+          vencimiento: new Date(item.fecha_vencimiento).toLocaleDateString('es-ES'),
+          estado: item.estado === 'pendiente' ? 'Pendiente' : item.estado
+        })))
         setHistory([])
       }
     } catch (e) {
@@ -597,7 +616,11 @@ export default function PayersStaffPage() {
                           }}
                         >
                           <span>{c.nombre}</span>
-                          <span style={{ opacity: 0.7, fontSize: '11px' }}>({cDet?.lead_score || 50} pts)</span>
+                          {c.id_estado === 3 || c.estado_contacto?.nombre_estado === 'payer' ? (
+                            <span style={{ background: '#b7d2b9', color: '#16231C', fontSize: '10px', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>✓ Pagado</span>
+                          ) : (
+                            <span style={{ opacity: 0.7, fontSize: '11px' }}>({cDet?.lead_score || 50} pts)</span>
+                          )}
                         </button>
                       )
                     })}
@@ -623,15 +646,24 @@ export default function PayersStaffPage() {
                       })()}</span>
                     </div>
                     <div className="phase-status">
-                      <span>Estado Fase 2:</span>
-                      <b>Lead calificado con propuesta</b>
+                      <span>Estado del proceso:</span>
+                      <b style={{ color: initialPaid ? '#b7d2b9' : '#e8ca8f' }}>
+                        {initialPaid ? 'Fase 3: Pago confirmado (PAYER)' : 'Fase 2: Lead con propuesta'}
+                      </b>
                     </div>
                   </div>
                 </div>
 
-                <div className="client-proof">
+                <div className="client-proof" style={{ 
+                  background: initialPaid ? 'rgba(183, 210, 185, 0.15)' : undefined, 
+                  borderColor: initialPaid ? '#b7d2b9' : undefined 
+                }}>
                   <Icon name="check" size={17} />
-                  <span>Lead proveniente de Fase 2 con propuesta aceptada, listo para proceso de pago.</span>
+                  <span>
+                    {initialPaid 
+                      ? `✓ Pago online completado exitosamente por ${money(confirmedTotal || service?.total || 120)}. Servicio activado y listo para atención en Fase 4 (CUSTOMERS).` 
+                      : 'Lead proveniente de Fase 2 con propuesta aceptada, listo para proceso de pago.'}
+                  </span>
                 </div>
 
                 {selectedClient.email && (
@@ -640,10 +672,19 @@ export default function PayersStaffPage() {
                     type="button" 
                     onClick={sendPaymentEmail}
                     disabled={sendingPaymentEmail}
-                    style={{ marginTop: '15px', width: '100%' }}
+                    style={{ 
+                      marginTop: '15px', 
+                      width: '100%',
+                      background: initialPaid ? 'rgba(255, 255, 255, 0.08)' : undefined,
+                      border: initialPaid ? '1px solid rgba(255, 255, 255, 0.2)' : undefined
+                    }}
                   >
-                    <Icon name="bell" size={17} />
-                    {sendingPaymentEmail ? 'Enviando email...' : '📧 Enviar email de pago al cliente'}
+                    <Icon name={initialPaid ? "check" : "bell"} size={17} />
+                    {sendingPaymentEmail 
+                      ? 'Enviando email...' 
+                      : initialPaid 
+                        ? '✓ Pago ya completado (Reenviar link si es necesario)' 
+                        : '📧 Enviar email de pago al cliente'}
                   </button>
                 )}
               </>
