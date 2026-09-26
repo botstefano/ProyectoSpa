@@ -236,9 +236,9 @@ export async function obtenerDetallesPago(idContacto) {
         .from('pago_detalle')
         .select('*')
         .eq('id_contacto', idContacto)
-        .single()
+        .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         throw handleSupabaseError(error, 'obtener detalles de pago')
       }
 

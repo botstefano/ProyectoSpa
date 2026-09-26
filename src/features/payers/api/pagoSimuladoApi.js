@@ -157,9 +157,10 @@ export async function obtenerPagoPorToken(token) {
           contacto (nombre, email, telefono)
         `)
         .eq('token_pago', token)
-        .single()
+        .maybeSingle()
 
       if (error) throw handleSupabaseError(error, 'obtener pago por token')
+      if (!data) throw new Error('Enlace de pago no encontrado o inválido')
 
       // Verificar si ha expirado
       if (new Date(data.expira_en) < new Date()) {
@@ -295,7 +296,7 @@ export async function obtenerComprobantePago(token) {
         `)
         .eq('token_pago', token)
         .eq('estado_pago', 'completado')
-        .single()
+        .maybeSingle()
 
       if (error) throw handleSupabaseError(error, 'obtener comprobante')
 
