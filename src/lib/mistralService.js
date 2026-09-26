@@ -241,10 +241,18 @@ function validarSolicitud(solicitud, propuestaActual) {
  * @param {string} apiKey - API key de Mistral
  */
 export async function sendMessageToMistral(message, conversationHistory = [], currentProposal = {}, apiKey) {
+  // Verificar si la API key está configurada
   if (!apiKey) {
-    logger.warn('mistralService', 'MISTRAL_API_KEY no configurada, usando modo simulación')
+    logger.warn('mistralService', 'MISTRAL_API_KEY no configurada - usando modo simulación')
+    logger.warn('mistralService', 'Verifica que VITE_MISTRAL_API_KEY esté configurado en .env y en Render')
     return simulateMistralResponse(message, currentProposal)
   }
+  
+  // Loggear que la API key está detectada (sin mostrar el valor completo por seguridad)
+  logger.info('mistralService', 'API key de Mistral detectada correctamente', { 
+    keyLength: apiKey.length,
+    keyPrefix: apiKey.substring(0, 8) + '...'
+  })
 
   try {
     // Validar solicitud contra el catálogo antes de enviar a Mistral
