@@ -254,9 +254,15 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
     const systemPrompt = buildSystemPrompt(currentProposal)
     
     // Construir el array de mensajes para Mistral
+    // Transformar el historial de conversación del formato español al formato de Mistral
+    const transformedHistory = conversationHistory.map(msg => ({
+      role: msg.rol || msg.role,
+      content: msg.mensaje || msg.content
+    }))
+
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...conversationHistory,
+      ...transformedHistory,
       { role: 'user', content: message }
     ]
 
