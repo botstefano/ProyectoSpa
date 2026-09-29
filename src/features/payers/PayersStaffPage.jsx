@@ -193,6 +193,72 @@ function extractServiceFromLead(lead) {
   }
 }
 
+const DEMO_PAYERS_LEADS = [
+  {
+    id_contacto: 101,
+    nombre: 'Camila Rodríguez',
+    telefono: '+51 912 345 678',
+    email: 'camila.r@gmail.com',
+    id_estado: 2,
+    estado_contacto: { nombre_estado: 'lead' },
+    lead_detalle: {
+      lead_score: 87,
+      propuesta_aceptada: true,
+      datos_propuesta: {
+        servicio: 'Ritual de relajación',
+        nombre: 'Paquete Ritual Relax Premium',
+        duracion: '90 min',
+        precioRegular: 180,
+        precioEspecial: 144,
+        precio: 144
+      }
+    },
+    descarga: { interes: 'Ritual de relajación' }
+  },
+  {
+    id_contacto: 102,
+    nombre: 'Valeria Paredes',
+    telefono: '+51 923 456 789',
+    email: 'v.paredes@empresa.pe',
+    id_estado: 3,
+    estado_contacto: { nombre_estado: 'payer' },
+    lead_detalle: {
+      lead_score: 74,
+      propuesta_aceptada: true,
+      datos_propuesta: {
+        servicio: 'Masaje descontracturante',
+        nombre: 'Plan Mensual Anti-Contracturas',
+        duracion: '60 min',
+        precioRegular: 560,
+        precioEspecial: 420,
+        precio: 420
+      }
+    },
+    descarga: { interes: 'Masaje descontracturante' }
+  },
+  {
+    id_contacto: 103,
+    nombre: 'María Gonzales',
+    telefono: '+51 967 890 123',
+    email: 'mariagonza@gmail.com',
+    id_estado: 2,
+    estado_contacto: { nombre_estado: 'lead' },
+    lead_detalle: {
+      lead_score: 91,
+      propuesta_aceptada: true,
+      datos_propuesta: {
+        servicio: 'Masaje de piedras calientes',
+        nombre: 'Experiencia Premium Piedras Calientes',
+        duracion: '100 min',
+        precioRegular: 240,
+        precioEspecial: 192,
+        precio: 192
+      }
+    },
+    descarga: { interes: 'Masaje de piedras calientes' }
+  }
+]
+
 export default function PayersStaffPage() {
   const [clients, setClients] = useState([])
   const [selectedClient, setSelectedClient] = useState(null)
@@ -305,16 +371,16 @@ export default function PayersStaffPage() {
           await selectClient(leads[0])
           console.log('[Payers] Cliente cargado exitosamente:', leads[0].nombre)
         } else {
-          console.log('[Payers] No hay leads que cumplan con los requisitos')
-          setClients([])
-          setSelectedClient(null)
-          setService(null)
-          setSchedule([])
+          console.log('[Payers] No hay leads de Supabase, usando demo')
+          setClients(DEMO_PAYERS_LEADS)
           setSource('demo')
+          await selectClient(DEMO_PAYERS_LEADS[0])
         }
       } catch (error) {
-        console.warn('[Payers] Aviso cargando clientes:', error?.message || error)
+        console.warn('[Payers] Aviso cargando clientes, usando demo:', error?.message || error)
+        setClients(DEMO_PAYERS_LEADS)
         setSource('demo')
+        await selectClient(DEMO_PAYERS_LEADS[0])
       } finally {
         setLoading(false)
       }
@@ -324,7 +390,9 @@ export default function PayersStaffPage() {
       loadClients()
     } else {
       console.log('[Payers] Supabase no configurado, usando modo demo')
+      setClients(DEMO_PAYERS_LEADS)
       setSource('demo')
+      selectClient(DEMO_PAYERS_LEADS[0])
       setLoading(false)
     }
   }, [])

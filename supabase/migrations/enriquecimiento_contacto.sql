@@ -22,7 +22,19 @@ CREATE TABLE IF NOT EXISTS enriquecimiento_contacto (
   -- Preferencias de servicio
   preferencia_aroma varchar(50),
   preferencia_musica varchar(50),
+  preferencia_temperatura varchar(50),
   sensibilidad_piel varchar(50),
+  otras_preferencias text,
+  
+  -- Estudios y formación
+  especialidad varchar(100),
+  nivel_estudios varchar(100),
+  universidad varchar(100),
+  
+  -- Información laboral
+  empresa varchar(100),
+  cargo varchar(100),
+  situacion_laboral varchar(100),
   
   -- Motivación y frecuencia
   motivo_principal varchar(100),

@@ -793,9 +793,249 @@ export function validarTokenPropuesta(token) {
   return token.startsWith('PROP-') && token.length >= 10
 }
 
+/**
+ * Generador inteligente local de propuestas (contingencia y fallback con alta personalización)
+ */
+function generarPropuestaInteligenteLocal(leadData = {}) {
+  const nombre = leadData.nombre || 'Cliente'
+  const primerNombre = nombre.trim().split(' ')[0] || 'Cliente'
+  const interes = (leadData.interes || leadData.servicio || 'Tratamiento facial').toLowerCase()
+  const tipoPiel = leadData.tipoPiel || leadData.gustos?.tipoPiel || 'Normal'
+  const aroma = leadData.aroma || leadData.gustos?.aroma || 'Lavanda'
+  const musica = leadData.musica || leadData.gustos?.musica || 'Naturaleza y relajación'
+  const temperatura = leadData.temperatura || leadData.gustos?.temperatura || 'Templada'
+  const horario = leadData.horario || leadData.gustos?.horario || 'Horarios a coordinar'
+  const motivo = leadData.motivo || leadData.otros?.observaciones || 'Bienestar general y relajación'
+
+  let propuesta
+  let porQue = []
+
+  if (interes.includes('corporal') || interes.includes('envoltura') || interes.includes('exfolia') || interes.includes('reductor')) {
+    propuesta = {
+      nombre: `Ritual Corporal Detox & Renovación Sensorial (${primerNombre})`,
+      desc: `Diseñado especialmente para ${primerNombre}, combina exfoliación botánica marina, envoltura mineralizante tibia y ducha sensorial a temperatura ${temperatura.toLowerCase()}.`,
+      tags: ['Corporal', 'Detox Mineral', 'Piel Suave'],
+      duracion: '80 min',
+      precioRegular: 'S/ 190.00',
+      precioEspecial: 'S/ 145.00',
+      ahorro: 'S/ 45.00',
+      descuento: '24%',
+      incluye: `Diagnóstico epidérmico, pulido con sales minerales, envoltura desintoxicante, aromaterapia de ${aroma.toLowerCase()} e hidratación con manteca de karité.`
+    }
+    porQue = [
+      `Ideal para renovación dérmica y desintoxicación celular profunda con envoltura a temperatura ${temperatura.toLowerCase()}.`,
+      `Protocolo ambientado con notas de ${musica.toLowerCase()} y aceites esenciales de ${aroma.toLowerCase()}.`,
+      `Excelente balance terapéutico y relajante con 24% de descuento de bienvenida.`
+    ]
+  } else if (interes.includes('masaje') || interes.includes('relaj') || interes.includes('descontract') || interes.includes('piedras')) {
+    propuesta = {
+      nombre: `Sesión Signature Anti-Estrés & Alivio Muscular Profundo`,
+      desc: `Tratamiento integral formulado para disolver nudos musculares y fatiga acumulada en espalda y cuello, en un espacio privado y aclimatado.`,
+      tags: ['Anti-Estrés', 'Descontracturante', 'Relajación'],
+      duracion: '85 min',
+      precioRegular: 'S/ 200.00',
+      precioEspecial: 'S/ 150.00',
+      ahorro: 'S/ 50.00',
+      descuento: '25%',
+      incluye: `Masaje terapéutico profundo, piedras volcánicas calientes focalizadas, aromaterapia de ${aroma.toLowerCase()}, compresas herbales y té orgánico.`
+    }
+    porQue = [
+      `Enfocado en aliviar la tensión muscular y el estrés cotidiano reportado (${motivo.slice(0, 50)}).`,
+      `Experiencia sensorial guiada con música de ${musica.toLowerCase()} y toallas térmicas.`,
+      `Turno adaptable a su disponibilidad (${horario}).`
+    ]
+  } else if (interes.includes('reflex') || interes.includes('podal') || interes.includes('terapeut')) {
+    propuesta = {
+      nombre: `Circuito Terapéutico de Reflexología & Drenaje Vital`,
+      desc: `Estimulación de terminales nerviosas podales y drenaje manual suave para restablecer el equilibrio físico y mental de ${primerNombre}.`,
+      tags: ['Reflexología', 'Holístico', 'Terapéutico'],
+      duracion: '70 min',
+      precioRegular: 'S/ 160.00',
+      precioEspecial: 'S/ 120.00',
+      ahorro: 'S/ 40.00',
+      descuento: '25%',
+      incluye: `Inmersión podal con sales de magnesio, digitopresión en zonas reflejas, masaje sedativo en piernas y aromaterapia de ${aroma.toLowerCase()}.`
+    }
+    porQue = [
+      `Tratamiento no invasivo ideal para activar la circulación y liberar la fatiga general.`,
+      `Aromas relajantes de ${aroma.toLowerCase()} para calmar el sistema nervioso central.`,
+      `Acompañamiento personalizado en cabina individual climatizada.`
+    ]
+  } else {
+    // Por defecto: Tratamiento Facial personalizado
+    propuesta = {
+      nombre: `Ritual Facial Glow & Hidratación Marina Personalizada`,
+      desc: `Protocolo facial intensivo adaptado específicamente para piel ${tipoPiel.toLowerCase()} de ${primerNombre}, revitalizando el cutis y devolviendo luminosidad.`,
+      tags: ['Facial Glow', `Piel ${tipoPiel}`, 'Antioxidante'],
+      duracion: '75 min',
+      precioRegular: 'S/ 185.00',
+      precioEspecial: 'S/ 139.00',
+      ahorro: 'S/ 46.00',
+      descuento: '25%',
+      incluye: `Limpieza profunda con ultrasonido, ácido hialurónico marino, mascarilla hidroplástica acorde a piel ${tipoPiel.toLowerCase()}, masaje kobido y protección solar.`
+    }
+    porQue = [
+      `Formulado con activos hipoalergénicos que respetan y nutren la piel ${tipoPiel.toLowerCase()}.`,
+      `Ambiente relajante enriquecido con esencias de ${aroma.toLowerCase()} y música de ${musica.toLowerCase()}.`,
+      `Resultados visibles desde la primera sesión con tarifa preferencial de apertura.`
+    ]
+  }
+
+  return {
+    success: true,
+    iaGenerada: false,
+    motor: 'Asistente Experto Origen Spa',
+    propuesta: {
+      ...propuesta,
+      aceptada: false,
+      fecha_aceptacion: null
+    },
+    porQue
+  }
+}
+
+/**
+ * Generar una propuesta altamente personalizada usando Mistral AI a partir de los datos recopilados del lead
+ * @param {Object} leadData - Datos completos recopilados del lead
+ * @param {string} [apiKey] - API key de Mistral opcional
+ */
+export async function generarPropuestaConMistral(leadData = {}, apiKey = null) {
+  const keyToUse = apiKey || import.meta.env?.VITE_MISTRAL_API_KEY || ''
+  
+  const nombre = leadData.nombre || 'Cliente'
+  const primerNombre = nombre.trim().split(' ')[0] || 'Cliente'
+  const interes = (leadData.interes || leadData.servicio || 'Tratamiento facial').trim()
+  const tipoPiel = leadData.tipoPiel || leadData.gustos?.tipoPiel || 'Normal/Mixta'
+  const aroma = leadData.aroma || leadData.gustos?.aroma || 'Lavanda'
+  const musica = leadData.musica || leadData.gustos?.musica || 'Sonidos de la naturaleza'
+  const temperatura = leadData.temperatura || leadData.gustos?.temperatura || 'Templada'
+  const horario = leadData.horario || leadData.gustos?.horario || 'Horario flexible'
+  const otrasPref = leadData.otrasPreferencias || leadData.gustos?.otras || ''
+  const motivo = leadData.motivo || leadData.otros?.observaciones || 'Bienestar general y alivio del estrés'
+  const cargo = leadData.cargo || leadData.laboral?.cargo || ''
+  const edad = leadData.edad || leadData.perfil?.edad || ''
+  const score = Number(leadData.score) || 50
+
+  // Si hay key válida y no estamos en cooldown
+  if (isRealMistralKey(keyToUse) && Date.now() >= mistralCooldownUntil) {
+    try {
+      const systemPrompt = `Eres el especialista senior en diseño de experiencias y tratamientos de Origen Spa en Trujillo, Perú.
+Tu tarea es diseñar una propuesta de tratamiento spa irresistible, altamente personalizada y profesional para un cliente, basada estrictamente en los datos recopilados sobre sus gustos, piel y necesidades.
+
+REGLAS OBLIGATORIAS:
+1. Responde EXCLUSIVAMENTE con un JSON válido. No uses bloques markdown, no uses backticks (\`\`\`json), no agregues comentarios ni texto antes o después.
+2. Precios en Soles peruanos (S/). Precio regular entre 150 y 240. Precio especial con descuento promocional de entre 18% y 25%.
+3. Integra directamente sus preferencias sensoriales: aroma (${aroma}), música (${musica}), tipo de piel (${tipoPiel}) y temperatura de agua (${temperatura}).
+4. El formato del JSON debe ser exactamente:
+{
+  "nombre": "string con el nombre creativo y exclusivo del paquete",
+  "desc": "string con descripción persuasiva (1 a 2 oraciones) orientada a ${primerNombre}",
+  "tags": ["Tag1", "Tag2", "Tag3"],
+  "duracion": "60 min / 75 min / 80 min / 90 min",
+  "precioRegular": "S/ 190.00",
+  "precioEspecial": "S/ 145.00",
+  "ahorro": "S/ 45.00",
+  "descuento": "24%",
+  "incluye": "string detallando evaluación, insumos orgánicos, aparatología o técnicas y beneficios incluidos",
+  "porQue": [
+    "Razón 1 destacando cómo beneficia su piel (${tipoPiel}) o motivo de consulta",
+    "Razón 2 destacando la personalización sensorial con ${aroma} y ambiente con ${musica}",
+    "Razón 3 destacando el impacto en su bienestar y relación valor-precio"
+  ]
+}`
+
+      const userPrompt = `Genera una propuesta spa personalizada para el cliente con los siguientes datos:
+- Nombre: ${nombre}
+- Interés principal: ${interes}
+- Tipo de piel: ${tipoPiel}
+- Aroma favorito: ${aroma}
+- Música preferida: ${musica}
+- Temperatura del agua: ${temperatura}
+- Horario preferido: ${horario}
+- Otras preferencias o sensibilidades: ${otrasPref || 'Sin restricciones'}
+- Motivo o necesidad: ${motivo}
+- Perfil profesional / ocupación: ${cargo || 'No especificada'}
+- Edad: ${edad || 'No especificada'}
+- Lead score: ${score}/100`
+
+      const modelsToTry = ['open-mistral-7b', 'mistral-small-latest']
+      for (const model of modelsToTry) {
+        try {
+          const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${keyToUse}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: model,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ],
+              temperature: 0.7,
+              max_tokens: 650
+            })
+          })
+
+          if (response.status === 429) {
+            logger.warn('mistralService', 'Rate limit 429 en Mistral al generar propuesta; activando generador local inteligente.')
+            mistralCooldownUntil = Date.now() + 60000
+            break
+          }
+
+          if (!response.ok) {
+            continue
+          }
+
+          const resJson = await response.json()
+          let rawContent = resJson.choices?.[0]?.message?.content || ''
+          rawContent = rawContent.replace(/```json/gi, '').replace(/```/g, '').trim()
+
+          const parsed = JSON.parse(rawContent)
+          if (parsed.nombre && parsed.precioEspecial) {
+            logger.info('mistralService', 'Propuesta generada exitosamente con Mistral AI', { nombre: parsed.nombre })
+            return {
+              success: true,
+              iaGenerada: true,
+              motor: 'Mistral AI',
+              propuesta: {
+                nombre: parsed.nombre,
+                desc: parsed.desc || `Propuesta personalizada creada por IA para ${primerNombre}.`,
+                tags: Array.isArray(parsed.tags) ? parsed.tags : ['Personalizado', 'Origen Spa'],
+                duracion: parsed.duracion || '75 min',
+                precioRegular: parsed.precioRegular || 'S/ 180.00',
+                precioEspecial: parsed.precioEspecial || 'S/ 140.00',
+                ahorro: parsed.ahorro || 'S/ 40.00',
+                descuento: parsed.descuento || '22%',
+                incluye: parsed.incluye || 'Protocolo completo personalizado y seguimiento.',
+                aceptada: false,
+                fecha_aceptacion: null
+              },
+              porQue: Array.isArray(parsed.porQue) && parsed.porQue.length > 0 ? parsed.porQue : [
+                `Formulado a la medida para su piel ${tipoPiel.toLowerCase()}.`,
+                `Ambiente multisensorial con aroma a ${aroma} y notas de ${musica.toLowerCase()}.`,
+                `Descuento preferencial de bienvenida con atención individual garantizada.`
+              ]
+            }
+          }
+        } catch (innerErr) {
+          logger.warn('mistralService', 'Aviso procesando respuesta de Mistral AI:', { error: innerErr.message })
+        }
+      }
+    } catch (apiErr) {
+      logger.warn('mistralService', 'Aviso comunicando con Mistral para propuesta:', { error: apiErr.message })
+    }
+  }
+
+  // Fallback inteligente garantizado
+  return generarPropuestaInteligenteLocal(leadData)
+}
+
 export default {
   sendMessageToMistral,
   applyProposalChanges,
   generarTokenPropuesta,
-  validarTokenPropuesta
+  validarTokenPropuesta,
+  generarPropuestaConMistral
 }

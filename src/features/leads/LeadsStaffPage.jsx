@@ -3,6 +3,7 @@ import { obtenerLeads, calificarLead, aceptarPropuesta, actualizarLead, califica
 import { obtenerNotificacionesPendientes, marcarNotificacionLeida } from "../../lib/notificaciones";
 import { enviarEmailEnriquecimiento, tieneEnriquecimientoCompletado } from "../enriquecimiento/api/enriquecimientoApi";
 import { enviarEmailPropuestaConChatbot } from "../propuestas/api/propuestasApi";
+import { generarPropuestaConMistral } from "../../lib/mistralService";
 import { logger } from "../../lib/logger";
 import StaffUniversalNav from "../../shared/components/StaffUniversalNav";
 
@@ -56,6 +57,9 @@ function IcoSend()   { return <svg width="14" height="14" viewBox="0 0 24 24" fi
 function IcoSave()   { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>; }
 function IcoWA()     { return <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>; }
 function IcoEmail()  { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>; }
+function IcoTrash()  { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>; }
+function IcoPlus()   { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
+function IcoPhone()  { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>; }
 
 export default function LeadsStaffPage() {
   const [leads, setLeads] = useState([]);
@@ -63,10 +67,29 @@ export default function LeadsStaffPage() {
   const [query, setQuery] = useState("");
   const [selId, setSelId] = useState(null);
   const [tab, setTab] = useState("Perfil");
-  const [note, setNote] = useState("");
   const [toast, setToast] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [generatingProposal, setGeneratingProposal] = useState(false);
+
+  // Estados interactivos para Historial
+  const [interaccionesMap, setInteraccionesMap] = useState({});
+  const [nuevoTipoInteraccion, setNuevoTipoInteraccion] = useState("Llamada");
+  const [nuevoDetalleInteraccion, setNuevoDetalleInteraccion] = useState("");
+  const [filtroHistorial, setFiltroHistorial] = useState("Todos");
+
+  // Estados interactivos para Notas
+  const [notasMap, setNotasMap] = useState({});
+  const [nuevaCategoriaNota, setNuevaCategoriaNota] = useState("General");
+  const [nuevaNotaTexto, setNuevaNotaTexto] = useState("");
+
+  // Estados interactivos para Actividades
+  const [actividadesMap, setActividadesMap] = useState({});
+  const [nuevoTituloActividad, setNuevoTituloActividad] = useState("");
+  const [nuevoTipoActividad, setNuevoTipoActividad] = useState("Llamada");
+  const [nuevaFechaActividad, setNuevaFechaActividad] = useState("");
+  const [nuevaPrioridadActividad, setNuevaPrioridadActividad] = useState("Media");
+  const [filtroActividad, setFiltroActividad] = useState("Pendientes");
 
   function show(msg) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
@@ -87,65 +110,48 @@ export default function LeadsStaffPage() {
           const comoConocio = est?.nombre_estado === 'buyer' ? 'Instagram Ads' : 'TikTok Ads';
           
           // Verificar si tiene datos de enriquecimiento completados
-          const tieneEnriquecimiento = enriquecimiento && enriquecimiento.completado;
+          const tieneEnriquecimiento = Boolean(enriquecimiento && enriquecimiento.completado);
+          const tipoPielCapturada = desc?.tipo_piel || "";
           
-          // Usar datos de enriquecimiento si están disponibles, si no usar datos básicos
-          const datosPerfil = tieneEnriquecimiento ? {
+          // Si tiene enriquecimiento completado, mostrar datos; si no, dejar vacíos
+          const datosPerfil = {
             nombre: dbLead.nombre || "",
-            edad: enriquecimiento.edad || "No especificado",
-            telefono: dbLead.telefono || "No provisto",
-            email: dbLead.email || "No provisto", 
-            distrito: enriquecimiento.distrito || "No especificado"
-          } : {
-            nombre: dbLead.nombre || "",
-            edad: "No especificado", 
-            telefono: dbLead.telefono || "No provisto",
-            email: dbLead.email || "No provisto", 
-            distrito: "No especificado"
+            edad: tieneEnriquecimiento ? (enriquecimiento.edad || "") : "",
+            telefono: dbLead.telefono || "",
+            email: dbLead.email || "", 
+            distrito: tieneEnriquecimiento ? (enriquecimiento.distrito || "") : ""
           };
 
-          const datosGustos = tieneEnriquecimiento ? {
+          const datosGustos = {
             tratamiento: nombrePlano,
-            aroma: enriquecimiento.preferencia_aroma || "No especificado",
-            musica: enriquecimiento.preferencia_musica || "No especificado",
-            horario: enriquecimiento.disponibilidad || "No especificado",
-            temperatura: "Templada",
-            otras: enriquecimiento.sensibilidad_piel ? `Sensibilidad: ${enriquecimiento.sensibilidad_piel}` : "No especificado"
-          } : {
-            tratamiento: nombrePlano,
-            aroma: "No especificado",
-            musica: "No especificado",
-            horario: "No especificado",
-            temperatura: "Templada",
-            otras: "Completa el formulario de enriquecimiento para más detalles"
+            tipoPiel: tipoPielCapturada ? (tipoPielCapturada.charAt(0).toUpperCase() + tipoPielCapturada.slice(1)) : "",
+            aroma: tieneEnriquecimiento ? (enriquecimiento.preferencia_aroma || "") : "",
+            musica: tieneEnriquecimiento ? (enriquecimiento.preferencia_musica || "") : "",
+            horario: tieneEnriquecimiento ? (enriquecimiento.disponibilidad || "") : "",
+            temperatura: tieneEnriquecimiento ? (enriquecimiento.preferencia_temperatura || "Templada") : "",
+            otras: tieneEnriquecimiento 
+              ? (enriquecimiento.otras_preferencias || (enriquecimiento.sensibilidad_piel ? `Sensibilidad: ${enriquecimiento.sensibilidad_piel}` : "")) 
+              : ""
           };
 
-          const datosEstudiante = tieneEnriquecimiento ? {
-            especialidad: enriquecimiento.ocupacion || "No especificado",
-            nivel: "No especificado",
-            universidad: "No especificado"
-          } : {
-            especialidad: "No especificado",
-            nivel: "No especificado",
-            universidad: "No especificado"
+          const datosEstudiante = {
+            especialidad: tieneEnriquecimiento ? (enriquecimiento.especialidad || enriquecimiento.ocupacion || "") : "",
+            nivel: tieneEnriquecimiento ? (enriquecimiento.nivel_estudios || "") : "",
+            universidad: tieneEnriquecimiento ? (enriquecimiento.universidad || "") : ""
           };
 
-          const datosLaboral = tieneEnriquecimiento ? {
-            empresa: "No especificado",
-            cargo: enriquecimiento.ocupacion || "No especificado",
-            situacion: "No especificado"
-          } : {
-            empresa: "No especificado",
-            cargo: "No especificado",
-            situacion: "No especificado"
+          const datosLaboral = {
+            empresa: tieneEnriquecimiento ? (enriquecimiento.empresa || "") : "",
+            cargo: tieneEnriquecimiento ? (enriquecimiento.cargo || enriquecimiento.ocupacion || "") : "",
+            situacion: tieneEnriquecimiento ? (enriquecimiento.situacion_laboral || "") : ""
           };
 
           const datosOtros = {
             comoConocio: comoConocio,
-            citaAgendada: "Pendiente de agendar",
+            citaAgendada: tieneEnriquecimiento ? "Pendiente de agendar" : "",
             observaciones: tieneEnriquecimiento 
               ? `Motivo: ${enriquecimiento.motivo_principal || 'No especificado'}. Frecuencia deseada: ${enriquecimiento.frecuencia_deseada || 'No especificado'}. Presupuesto: ${enriquecimiento.presupuesto || 'No especificado'}.`
-              : "Datos básicos de contacto. Envía formulario de enriquecimiento para más información.",
+              : "Contacto captado en landing page. Pendiente de completar formulario de enriquecimiento.",
             fechaRegistro: new Date(dbLead.fecha_registro).toLocaleDateString('es-ES'),
             enriquecimientoCompletado: tieneEnriquecimiento,
             fechaEnriquecimiento: tieneEnriquecimiento && enriquecimiento.fecha_completado 
@@ -172,12 +178,18 @@ export default function LeadsStaffPage() {
             estudiante: datosEstudiante,
             laboral: datosLaboral,
             otros: datosOtros,
-            propuesta: { 
+            propuesta: det?.datos_propuesta ? {
+              ...det.datos_propuesta,
+              aceptada: Boolean(det?.propuesta_aceptada),
+              fecha_aceptacion: det?.fecha_aceptacion || null
+            } : { 
               nombre: `Paquete ${nombrePlano}`, 
-              desc: "Propuesta generada automáticamente basada en el interés.",
+              desc: "Propuesta personalizada adaptada al interés del cliente.",
               tags: ["Recomendado", "Bienestar"],
               duracion: "60 min", precioRegular: "S/ 150.00", precioEspecial: "S/ 120.00", ahorro: "S/ 30.00", descuento: "20%",
-              incluye: "Evaluación inicial, tratamiento y seguimiento." 
+              incluye: "Evaluación inicial, tratamiento y seguimiento.",
+              aceptada: Boolean(det?.propuesta_aceptada),
+              fecha_aceptacion: det?.fecha_aceptacion || null
             },
             porQue: ["Se adapta a su interés inicial.", "Resultados visibles desde la primera sesión.", "Contribuye a su bienestar."],
             notas: tieneEnriquecimiento 
@@ -189,14 +201,11 @@ export default function LeadsStaffPage() {
         // --- FALLBACK DEMO ---
         // Si Supabase devuelve 0 registros, se muestran datos de ejemplo.
         const MOCK_LEADS = [
-          { id:1, iniciales:'CR', nombre:'Camila Rodriguez', servicio:'Ritual de relajacion', score:87, temp:'Caliente', cita:'Mie 22 oct 10:00', interes:'Ritual de relajacion', frase:'Busco desestresarme tras largas semanas de trabajo.', tags:['#EstresSevero','#RitualRelax'], perfil:{nombre:'Camila Rodriguez',edad:'29 anios',telefono:'+51 912 345 678',email:'camila.r@gmail.com',distrito:'Miraflores'}, gustos:{tratamiento:'Ritual de relajacion',aroma:'Lavanda',musica:'Sonidos de naturaleza',horario:'Fines de semana 9-12',temperatura:'Calida',otras:'Prefiere sesiones sin ruido externo'}, estudiante:{especialidad:'Diseno grafico',nivel:'Universitaria egresada',universidad:'Toulouse Lautrec'}, laboral:{empresa:'Freelance',cargo:'Disenadora Senior',situacion:'Independiente'}, otros:{comoConocio:'Instagram Ads',citaAgendada:'Mie 22 oct 10:00',observaciones:'Muy motivada, ya fue en otra oportunidad a un spa.',fechaRegistro:'15/09/2026',enriquecimientoCompletado:true,fechaEnriquecimiento:'16/09/2026'}, propuesta:{nombre:'Paquete Ritual Relax Premium',desc:'Sesion completa de relajacion profunda con aromaterapia y musica personalizada.',tags:['Recomendado','Bienestar'],duracion:'90 min',precioRegular:'S/ 180.00',precioEspecial:'S/ 144.00',ahorro:'S/ 36.00',descuento:'20%',incluye:'Aromaterapia, masaje relajante, barro volcanico y te de hierbas.'}, porQue:['Historial de estres alto y ritmo laboral intenso.','Responde muy bien a la aromaterapia de lavanda.','Alta disponibilidad de pago y fidelidad potencial.'], notas:'Lead caliente. Muy receptiva al ritual premium.' },
-          { id:2, iniciales:'VP', nombre:'Valeria Paredes', servicio:'Masaje descontracturante', score:74, temp:'Caliente', cita:'Jue 23 oct 15:00', interes:'Masaje descontracturante', frase:'Tengo contracturas por trabajar en computadora todo el dia.', tags:['#DoloresCronicos','#MasajeDeep'], perfil:{nombre:'Valeria Paredes',edad:'34 anios',telefono:'+51 923 456 789',email:'v.paredes@empresa.pe',distrito:'San Isidro'}, gustos:{tratamiento:'Masaje descontracturante',aroma:'Eucalipto',musica:'Clasica instrumental',horario:'Tardes entre semana',temperatura:'Calida intensa',otras:'Zona lumbar y cervical como prioridad'}, estudiante:{especialidad:'Administracion',nivel:'Postgrado',universidad:'ESAN'}, laboral:{empresa:'BCP',cargo:'Gerente de proyectos',situacion:'Ejecutiva'}, otros:{comoConocio:'Google Ads',citaAgendada:'Jue 23 oct 15:00',observaciones:'Interesada en plan mensual.',fechaRegistro:'14/09/2026',enriquecimientoCompletado:true,fechaEnriquecimiento:'15/09/2026'}, propuesta:{nombre:'Plan Mensual Anti-Contracturas',desc:'4 sesiones mensuales de masaje descontracturante con enfoque en zona lumbar y cervical.',tags:['Plan Mensual','Mas Vendido'],duracion:'60 min c/u',precioRegular:'S/ 560.00',precioEspecial:'S/ 420.00',ahorro:'S/ 140.00',descuento:'25%',incluye:'4 masajes, aceite de eucalipto premium y seguimiento de evolucion.'}, porQue:['Dolor cronico documentado con alta recurrencia.','Perfil ejecutivo con presupuesto disponible.','Interes explicito en plan mensual.'], notas:'Candidata ideal para membresia mensual.' },
-          { id:3, iniciales:'LP', nombre:'Luciana Pacheco', servicio:'Facial anti-edad', score:62, temp:'Tibio', cita:'Vie 24 oct 11:00', interes:'Facial anti-edad', frase:'Quiero empezar a cuidar mi piel antes de que sea tarde.', tags:['#PrevencionPiel','#FacialPremium'], perfil:{nombre:'Luciana Pacheco',edad:'41 anios',telefono:'+51 934 567 890',email:'lupacheco@hotmail.com',distrito:'La Molina'}, gustos:{tratamiento:'Facial anti-edad',aroma:'Rosa y jazmin',musica:'Meditacion guiada',horario:'Mananas de viernes',temperatura:'Neutra',otras:'Piel sensible, sin fragancias fuertes'}, estudiante:{especialidad:'Dermatologia estetica',nivel:'Interesada',universidad:'UPCH referida'}, laboral:{empresa:'Ama de casa',cargo:'Gestora del hogar',situacion:'Independiente'}, otros:{comoConocio:'Recomendacion amiga',citaAgendada:'Vie 24 oct 11:00',observaciones:'Le preocupa el costo, pero esta interesada.',fechaRegistro:'13/09/2026',enriquecimientoCompletado:false,fechaEnriquecimiento:null}, propuesta:{nombre:'Ritual Facial Anti-Edad Express',desc:'Tratamiento facial con acido hialuronico y colageno marino.',tags:['Anti-edad','Piel Sensible'],duracion:'75 min',precioRegular:'S/ 200.00',precioEspecial:'S/ 160.00',ahorro:'S/ 40.00',descuento:'20%',incluye:'Limpieza profunda, serum anti-edad, mascarilla y protector solar.'}, porQue:['Interes preventivo temprano.','Piel sensible requiere productos premium.','Referida por clienta activa.'], notas:'Necesita ver resultados rapidos. Sugerir sesion de prueba.' },
-          { id:4, iniciales:'AM', nombre:'Andrea Munoz', servicio:'Envoltura corporal', score:45, temp:'Tibio', cita:'Pendiente', interes:'Envoltura corporal', frase:'Quiero verme bien para una reunion importante el proximo mes.', tags:['#EventoProximo','#BodiesculptBody'], perfil:{nombre:'Andrea Munoz',edad:'27 anios',telefono:'+51 945 678 901',email:'andreamunoz@outlook.com',distrito:'Surco'}, gustos:{tratamiento:'Envoltura corporal',aroma:'Citricos',musica:'Pop suave',horario:'Fines de semana',temperatura:'Calida',otras:'Primera vez en spa'}, estudiante:{especialidad:'Marketing digital',nivel:'Egresada',universidad:'UPC'}, laboral:{empresa:'Agencia digital',cargo:'Community Manager',situacion:'Junior'}, otros:{comoConocio:'TikTok Ads',citaAgendada:'Pendiente',observaciones:'Motivacion puntual para evento.',fechaRegistro:'16/09/2026',enriquecimientoCompletado:false,fechaEnriquecimiento:null}, propuesta:{nombre:'Paquete Evento Especial',desc:'Envoltura corporal + exfoliacion + ritual express para ocasion especial.',tags:['Evento','Primera Visita'],duracion:'90 min',precioRegular:'S/ 160.00',precioEspecial:'S/ 120.00',ahorro:'S/ 40.00',descuento:'25%',incluye:'Envoltura, exfoliacion natural, masaje express y kit de bienvenida.'}, porQue:['Motivacion clara de corto plazo.','TikTok Ads indica perfil de decision impulsiva.','Potencial de convertir en cliente recurrente.'], notas:'Agendar antes del evento. Mostrar fotos de resultados.' },
-          { id:5, iniciales:'DS', nombre:'Diana Salcedo', servicio:'Reflexologia', score:38, temp:'Frio', cita:'Pendiente', interes:'Reflexologia', frase:'Me lo recomendo mi medico para el estres cronico.', tags:['#IndicesMedicos','#Reflexologia'], perfil:{nombre:'Diana Salcedo',edad:'52 anios',telefono:'+51 956 789 012',email:'dianasalcedo@yahoo.com',distrito:'Pueblo Libre'}, gustos:{tratamiento:'Reflexologia',aroma:'Sin preferencia',musica:'Silencio',horario:'Mananas entre semana',temperatura:'Neutra',otras:'Referida por medico internista'}, estudiante:{especialidad:'Enfermeria',nivel:'Tecnica',universidad:'CENFOTUR'}, laboral:{empresa:'Clinica San Pablo',cargo:'Tecnica enfermeria',situacion:'Dependiente'}, otros:{comoConocio:'Referencia medica',citaAgendada:'Pendiente',observaciones:'Necesita explicacion detallada del procedimiento.',fechaRegistro:'12/09/2026',enriquecimientoCompletado:false,fechaEnriquecimiento:null}, propuesta:{nombre:'Sesion Reflexologia Terapeutica',desc:'Sesion de reflexologia plantar y corporal con enfoque en puntos de estres.',tags:['Terapeutico','Medico Referido'],duracion:'60 min',precioRegular:'S/ 120.00',precioEspecial:'S/ 96.00',ahorro:'S/ 24.00',descuento:'20%',incluye:'Evaluacion inicial, reflexologia completa y recomendaciones.'}, porQue:['Referencia medica aumenta credibilidad.','Perfil de salud sensible al discurso terapeutico.','Score bajo por falta de contacto previo.'], notas:'Llamar para explicar el procedimiento antes de agendar.' },
-          { id:6, iniciales:'MG', nombre:'Maria Gonzales', servicio:'Masaje de piedras calientes', score:91, temp:'Caliente', cita:'Mar 21 oct 09:00', interes:'Masaje de piedras calientes', frase:'Soy clienta frecuente, quiero probar algo nuevo este mes.', tags:['#ClienteFiel','#UpsellPremium'], perfil:{nombre:'Maria Gonzales',edad:'38 anios',telefono:'+51 967 890 123',email:'mariagonza@gmail.com',distrito:'Barranco'}, gustos:{tratamiento:'Masaje de piedras calientes',aroma:'Sandalo y vetiver',musica:'Jazz suave',horario:'Martes o jueves manana',temperatura:'Muy calida',otras:'Sin restricciones, ha probado varios tratamientos'}, estudiante:{especialidad:'Psicologia',nivel:'Licenciada',universidad:'PUCP'}, laboral:{empresa:'Consultora independiente',cargo:'Psicologa organizacional',situacion:'Independiente'}, otros:{comoConocio:'Clienta recurrente',citaAgendada:'Mar 21 oct 09:00',observaciones:'5 visitas anteriores. Candidata a membresia premium.',fechaRegistro:'10/09/2026',enriquecimientoCompletado:true,fechaEnriquecimiento:'11/09/2026'}, propuesta:{nombre:'Experiencia Premium Piedras Calientes',desc:'Ritual completo con piedras volcanicas, aceites esenciales premium y musica personalizada.',tags:['Premium','Clienta VIP'],duracion:'100 min',precioRegular:'S/ 240.00',precioEspecial:'S/ 192.00',ahorro:'S/ 48.00',descuento:'20%',incluye:'Masaje con piedras volcanicas, aromaterapia premium y reflexologia express.'}, porQue:['Score 91 — la clienta mas valiosa del pipeline.','5 visitas previas — NPS estimado muy alto.','Perfecta para membresia anual VIP.'], notas:'Ofrecer membresia VIP anual. Muy alta probabilidad de cierre.' },
-          { id:7, iniciales:'PP', nombre:'Patricia Perez', servicio:'Aromaterapia', score:55, temp:'Tibio', cita:'Sab 26 oct 14:00', interes:'Aromaterapia', frase:'Vi el anuncio en Instagram y me parecio muy bonito el lugar.', tags:['#VisualBrand','#InstagramLead'], perfil:{nombre:'Patricia Perez',edad:'31 anios',telefono:'+51 978 901 234',email:'pperez.lifestyle@gmail.com',distrito:'Magdalena'}, gustos:{tratamiento:'Aromaterapia',aroma:'Todos - le encanta experimentar',musica:'Playlist relajante de Spotify',horario:'Fines de semana tarde',temperatura:'Cualquiera',otras:'Muy activa en redes sociales'}, estudiante:{especialidad:'Comunicaciones',nivel:'Egresada',universidad:'USIL'}, laboral:{empresa:'Empresa de moda',cargo:'PR Influencer Relations',situacion:'Dependiente'}, otros:{comoConocio:'Instagram Ads',citaAgendada:'Sab 26 oct 14:00',observaciones:'Micro-influencer (8k seguidores). Alto valor de referidos potenciales.',fechaRegistro:'17/09/2026',enriquecimientoCompletado:true,fechaEnriquecimiento:'17/09/2026'}, propuesta:{nombre:'Experiencia Aromaterapia Instagrameable',desc:'Sesion sensorial de aromaterapia con setup visual premium para redes sociales.',tags:['Instagrameable','Social Media'],duracion:'75 min',precioRegular:'S/ 150.00',precioEspecial:'S/ 105.00',ahorro:'S/ 45.00',descuento:'30%',incluye:'Aromaterapia completa, setup fotografico y kit de aceites esenciales.'}, porQue:['Micro-influencer con 8k seguidores — marketing organico.','Decision por imagen.','30% de descuento a cambio de contenido en RRSS.'], notas:'Coordinar sesion fotografica. Pedir permiso para usar contenido.' },
-          { id:8, iniciales:'CF', nombre:'Carolina Flores', servicio:'Exfoliacion corporal', score:29, temp:'Frio', cita:'Pendiente', interes:'Exfoliacion corporal', frase:'Busque spas en Google y aparecieron ustedes.', tags:['#SearchLead','#TopFunnel'], perfil:{nombre:'Carolina Flores',edad:'24 anios',telefono:'+51 989 012 345',email:'carol.flores24@gmail.com',distrito:'Los Olivos'}, gustos:{tratamiento:'Exfoliacion corporal',aroma:'Sin preferencia definida',musica:'Sin preferencia',horario:'Flexible',temperatura:'No sabe',otras:'Primera vez considerando un spa'}, estudiante:{especialidad:'Contabilidad',nivel:'Estudiante universitaria',universidad:'UNMSM'}, laboral:{empresa:'Tienda retail',cargo:'Cajera part-time',situacion:'Estudiante-trabajadora'}, otros:{comoConocio:'Google Search',citaAgendada:'Pendiente',observaciones:'Budget limitado. Necesita nurturing y demostracion de valor.',fechaRegistro:'18/09/2026',enriquecimientoCompletado:false,fechaEnriquecimiento:null}, propuesta:{nombre:'Starter Pack Exfoliacion',desc:'Sesion introductoria de exfoliacion corporal — el primer paso hacia el bienestar.',tags:['Introductorio','Precio Accesible'],duracion:'45 min',precioRegular:'S/ 90.00',precioEspecial:'S/ 63.00',ahorro:'S/ 27.00',descuento:'30%',incluye:'Exfoliacion natural, hidratacion post-exfoliacion y cupon de 15% para segunda visita.'}, porQue:['Google Search indica intencion activa de busqueda.','Score bajo por desconocimiento — no por falta de interes.','Precio de entrada bajo — ideal para convertir y fidelizar.'], notas:'Enviar informacion del lugar con fotos. Cupon de descuento en primer mensaje.' }
+          { id:1, iniciales:'CR', nombre:'Camila Rodriguez', servicio:'Ritual de relajacion', score:87, temp:'Caliente', cita:'Mie 22 oct 10:00', interes:'Ritual de relajacion', frase:'Busco desestresarme tras largas semanas de trabajo.', tags:['#EstresSevero','#RitualRelax'], perfil:{nombre:'Camila Rodriguez',edad:'29 años',telefono:'+51 912 345 678',email:'camila.r@gmail.com',distrito:'Miraflores'}, gustos:{tratamiento:'Ritual de relajacion',tipoPiel:'Mixta',aroma:'Lavanda',musica:'Sonidos de naturaleza',horario:'Fines de semana 9-12',temperatura:'Calida',otras:'Prefiere sesiones sin ruido externo'}, estudiante:{especialidad:'Diseño grafico',nivel:'Universitaria egresada',universidad:'Toulouse Lautrec'}, laboral:{empresa:'Freelance',cargo:'Diseñadora Senior',situacion:'Independiente'}, otros:{comoConocio:'Instagram Ads',citaAgendada:'Mie 22 oct 10:00',observaciones:'Muy motivada, ya fue en otra oportunidad a un spa.',fechaRegistro:'15/09/2026',enriquecimientoCompletado:true,fechaEnriquecimiento:'16/09/2026'}, propuesta:{nombre:'Paquete Ritual Relax Premium',desc:'Sesion completa de relajacion profunda con aromaterapia y musica personalizada.',tags:['Recomendado','Bienestar'],duracion:'90 min',precioRegular:'S/ 180.00',precioEspecial:'S/ 144.00',ahorro:'S/ 36.00',descuento:'20%',incluye:'Aromaterapia, masaje relajante, barro volcanico y te de hierbas.'}, porQue:['Historial de estres alto y ritmo laboral intenso.','Responde muy bien a la aromaterapia de lavanda.','Alta disponibilidad de pago y fidelidad potencial.'], notas:'Lead caliente. Muy receptiva al ritual premium.' },
+          { id:2, iniciales:'VP', nombre:'Valeria Paredes', servicio:'Masaje descontracturante', score:74, temp:'Caliente', cita:'Jue 23 oct 15:00', interes:'Masaje descontracturante', frase:'Tengo contracturas por trabajar en computadora todo el dia.', tags:['#DoloresCronicos','#MasajeDeep'], perfil:{nombre:'Valeria Paredes',edad:'34 años',telefono:'+51 923 456 789',email:'v.paredes@empresa.pe',distrito:'San Isidro'}, gustos:{tratamiento:'Masaje descontracturante',tipoPiel:'Normal',aroma:'Eucalipto',musica:'Clasica instrumental',horario:'Tardes entre semana',temperatura:'Calida intensa',otras:'Zona lumbar y cervical como prioridad'}, estudiante:{especialidad:'Administracion',nivel:'Postgrado',universidad:'ESAN'}, laboral:{empresa:'BCP',cargo:'Gerente de proyectos',situacion:'Ejecutiva'}, otros:{comoConocio:'Google Ads',citaAgendada:'Jue 23 oct 15:00',observaciones:'Interesada en plan mensual.',fechaRegistro:'14/09/2026',enriquecimientoCompletado:true,fechaEnriquecimiento:'15/09/2026'}, propuesta:{nombre:'Plan Mensual Anti-Contracturas',desc:'4 sesiones mensuales de masaje descontracturante con enfoque en zona lumbar y cervical.',tags:['Plan Mensual','Mas Vendido'],duracion:'60 min c/u',precioRegular:'S/ 560.00',precioEspecial:'S/ 420.00',ahorro:'S/ 140.00',descuento:'25%',incluye:'4 masajes, aceite de eucalipto premium y seguimiento de evolucion.'}, porQue:['Dolor cronico documentado con alta recurrencia.','Perfil ejecutivo con presupuesto disponible.','Interes explicito en plan mensual.'], notas:'Candidata ideal para membresia mensual.' },
+          { id:3, iniciales:'LP', nombre:'Luciana Pacheco', servicio:'Facial anti-edad', score:62, temp:'Tibio', cita:'', interes:'Facial anti-edad', frase:'Quiero empezar a cuidar mi piel antes de que sea tarde.', tags:['#LeadNuevo','#FacialAntiEdad'], perfil:{nombre:'Luciana Pacheco',edad:'',telefono:'+51 934 567 890',email:'lupacheco@hotmail.com',distrito:''}, gustos:{tratamiento:'Facial anti-edad',tipoPiel:'Sensible',aroma:'',musica:'',horario:'',temperatura:'',otras:''}, estudiante:{especialidad:'',nivel:'',universidad:''}, laboral:{empresa:'',cargo:'',situacion:''}, otros:{comoConocio:'Instagram Ads',citaAgendada:'',observaciones:'Contacto captado en landing page. Pendiente de completar formulario de enriquecimiento.',fechaRegistro:'13/09/2026',enriquecimientoCompletado:false,fechaEnriquecimiento:null}, propuesta:{nombre:'Ritual Facial Anti-Edad Express',desc:'Tratamiento facial con acido hialuronico y colageno marino.',tags:['Anti-edad','Piel Sensible'],duracion:'75 min',precioRegular:'S/ 200.00',precioEspecial:'S/ 160.00',ahorro:'S/ 40.00',descuento:'20%',incluye:'Limpieza profunda, serum anti-edad, mascarilla y protector solar.'}, porQue:['Interes preventivo temprano.','Piel sensible requiere productos premium.','Referida por clienta activa.'], notas:'Lead captado desde la landing. Formulario de enriquecimiento pendiente.' },
+          { id:4, iniciales:'AM', nombre:'Andrea Muñoz', servicio:'Envoltura corporal', score:45, temp:'Tibio', cita:'', interes:'Envoltura corporal', frase:'Quiero verme bien para una reunion importante.', tags:['#LeadNuevo','#EnvolturaCorporal'], perfil:{nombre:'Andrea Muñoz',edad:'',telefono:'+51 945 678 901',email:'andreamunoz@outlook.com',distrito:''}, gustos:{tratamiento:'Envoltura corporal',tipoPiel:'Seca',aroma:'',musica:'',horario:'',temperatura:'',otras:''}, estudiante:{especialidad:'',nivel:'',universidad:''}, laboral:{empresa:'',cargo:'',situacion:''}, otros:{comoConocio:'TikTok Ads',citaAgendada:'',observaciones:'Contacto captado en landing page. Pendiente de completar formulario de enriquecimiento.',fechaRegistro:'16/09/2026',enriquecimientoCompletado:false,fechaEnriquecimiento:null}, propuesta:{nombre:'Paquete Evento Especial',desc:'Envoltura corporal + exfoliacion + ritual express para ocasion especial.',tags:['Evento','Primera Visita'],duracion:'90 min',precioRegular:'S/ 160.00',precioEspecial:'S/ 120.00',ahorro:'S/ 40.00',descuento:'25%',incluye:'Envoltura, exfoliacion natural, masaje express y kit de bienvenida.'}, porQue:['Motivacion clara de corto plazo.','TikTok Ads indica perfil de decision impulsiva.'], notas:'Lead nuevo pendiente de enriquecimiento.' },
+          { id:5, iniciales:'DS', nombre:'Diana Salcedo', servicio:'Reflexologia', score:38, temp:'Frio', cita:'', interes:'Reflexologia', frase:'Me lo recomendo mi medico para el estres cronico.', tags:['#LeadNuevo','#Reflexologia'], perfil:{nombre:'Diana Salcedo',edad:'',telefono:'+51 956 789 012',email:'dianasalcedo@yahoo.com',distrito:''}, gustos:{tratamiento:'Reflexologia',tipoPiel:'Grasa',aroma:'',musica:'',horario:'',temperatura:'',otras:''}, estudiante:{especialidad:'',nivel:'',universidad:''}, laboral:{empresa:'',cargo:'',situacion:''}, otros:{comoConocio:'Instagram Ads',citaAgendada:'',observaciones:'Contacto captado en landing page. Pendiente de completar formulario de enriquecimiento.',fechaRegistro:'12/09/2026',enriquecimientoCompletado:false,fechaEnriquecimiento:null}, propuesta:{nombre:'Sesion Reflexologia Terapeutica',desc:'Sesion de reflexologia plantar y corporal con enfoque en puntos de estres.',tags:['Terapeutico','Medico Referido'],duracion:'60 min',precioRegular:'S/ 120.00',precioEspecial:'S/ 96.00',ahorro:'S/ 24.00',descuento:'20%',incluye:'Evaluacion inicial, reflexologia completa y recomendaciones.'}, porQue:['Referencia medica aumenta credibilidad.','Perfil de salud sensible al discurso terapeutico.'], notas:'Pendiente de enviar formulario de enriquecimiento.' }
         ];
 
         const finalLeads = leadsMapeados.length > 0 ? leadsMapeados : MOCK_LEADS;
@@ -290,41 +299,609 @@ export default function LeadsStaffPage() {
     }
   };
 
-  const handleAcceptProposal = async () => {
-    if (!lead) return;
-    
-    try {
-      const datosPropuesta = {
-        nombre: lead.propuesta.nombre,
-        precio: lead.propuesta.precioEspecial,
-        duracion: lead.propuesta.duracion,
-        incluye: lead.propuesta.incluye,
-        descuento: lead.propuesta.descuento
-      };
-      
-      const result = await aceptarPropuesta(lead.id, datosPropuesta);
-      
-      if (result.success) {
-        // Actualizar el estado local del lead
-        setLeads(prev => prev.map(l => 
-          l.id === lead.id ? { 
-            ...l, 
-            propuesta: { 
-              ...l.propuesta, 
-              aceptada: true,
-              fecha_aceptacion: new Date().toISOString()
-            }
-          } : l
-        ));
-        
-        show("✅ Propuesta aceptada. El lead ahora está listo para Fase 3 (PAYERS)");
-      } else {
-        show(result.error?.message || "Error al aceptar propuesta");
-      }
-    } catch (err) {
-      logger.error('LeadsStaffPage', 'Error aceptando propuesta', { err });
-      show("Error al aceptar propuesta. Verifica la conexión a Supabase.");
+  // --- GESTIÓN DE HISTORIAL ---
+  function getLeadHistorial(leadItem) {
+    if (!leadItem) return [];
+    if (interaccionesMap[leadItem.id]) {
+      return interaccionesMap[leadItem.id];
     }
+    try {
+      const stored = localStorage.getItem(`crm_historial_${leadItem.id}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+
+    const base = [
+      {
+        id: `h-reg-${leadItem.id}`,
+        tipo: 'Registro',
+        titulo: 'Contacto captado en Landing Page',
+        detalle: `Interés registrado: ${leadItem.interes}. Canal: ${leadItem.otros?.comoConocio || 'Instagram Ads'}. Descarga de Guía de cuidado facial.`,
+        fecha: leadItem.otros?.fechaRegistro ? `${leadItem.otros.fechaRegistro} 09:30` : '15/09/2026 09:30',
+        autor: 'Sistema'
+      }
+    ];
+
+    if (leadItem.otros?.enriquecimientoCompletado) {
+      base.push({
+        id: `h-enr-${leadItem.id}`,
+        tipo: 'Enriquecimiento',
+        titulo: 'Formulario de enriquecimiento completado',
+        detalle: `Preferencias recopiladas: Aroma ${leadItem.gustos?.aroma || 'Lavanda'}, Música ${leadItem.gustos?.musica || 'Naturaleza'}, Piel ${leadItem.gustos?.tipoPiel || 'Normal'} y Temperatura ${leadItem.gustos?.temperatura || 'Templada'}.`,
+        fecha: leadItem.otros?.fechaEnriquecimiento ? `${leadItem.otros.fechaEnriquecimiento} 11:20` : '16/09/2026 11:20',
+        autor: 'Cliente'
+      });
+    }
+
+    if (leadItem.propuesta?.nombre) {
+      base.push({
+        id: `h-prop-${leadItem.id}`,
+        tipo: 'Propuesta',
+        titulo: `Propuesta activa: ${leadItem.propuesta.nombre}`,
+        detalle: `Precio ${leadItem.propuesta.precioEspecial || 'S/ 120.00'} (${leadItem.propuesta.duracion || '60 min'}). ${leadItem.propuesta.aceptada ? 'Aprobada por el cliente vía email' : 'Pendiente de aprobación'}.`,
+        fecha: leadItem.propuesta.fecha_aceptacion ? new Date(leadItem.propuesta.fecha_aceptacion).toLocaleString('es-ES') : 'Vigente',
+        autor: 'Staff Origen Spa'
+      });
+    }
+
+    return base;
+  }
+
+  function registrarEventoHistorial(leadId, evento) {
+    const currentLead = leads.find(l => l.id === leadId);
+    const existing = interaccionesMap[leadId] || getLeadHistorial(currentLead);
+    const nuevo = {
+      id: `h-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      tipo: evento.tipo || 'Llamada',
+      titulo: evento.titulo || 'Interacción registrada',
+      detalle: evento.detalle || '',
+      fecha: new Date().toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      autor: evento.autor || 'Staff Origen Spa'
+    };
+    const updated = [nuevo, ...existing];
+    setInteraccionesMap(prev => ({ ...prev, [leadId]: updated }));
+    try {
+      localStorage.setItem(`crm_historial_${leadId}`, JSON.stringify(updated));
+    } catch (_) {}
+  }
+
+  const handleAgregarInteraccionManual = (e) => {
+    e.preventDefault();
+    if (!lead || !nuevoDetalleInteraccion.trim()) return;
+
+    registrarEventoHistorial(lead.id, {
+      tipo: nuevoTipoInteraccion,
+      titulo: `${nuevoTipoInteraccion} con ${fn}`,
+      detalle: nuevoDetalleInteraccion.trim(),
+      autor: 'Staff Origen Spa'
+    });
+
+    setNuevoDetalleInteraccion("");
+    show("✅ Interacción registrada en el Historial");
+  };
+
+  // --- GESTIÓN DE NOTAS ---
+  function getLeadNotas(leadItem) {
+    if (!leadItem) return [];
+    if (notasMap[leadItem.id]) {
+      return notasMap[leadItem.id];
+    }
+    try {
+      const stored = localStorage.getItem(`crm_notas_${leadItem.id}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+
+    const base = [];
+    if (leadItem.notas) {
+      base.push({
+        id: `n-init-${leadItem.id}`,
+        categoria: 'General',
+        texto: leadItem.notas,
+        fecha: leadItem.otros?.fechaRegistro ? `${leadItem.otros.fechaRegistro} 10:00` : '15/09/2026 10:00',
+        autor: 'Staff Origen Spa'
+      });
+    }
+    if (leadItem.otros?.observaciones) {
+      base.push({
+        id: `n-obs-${leadItem.id}`,
+        categoria: 'Preferencia',
+        texto: leadItem.otros.observaciones,
+        fecha: leadItem.otros?.fechaRegistro ? `${leadItem.otros.fechaRegistro} 10:05` : '15/09/2026 10:05',
+        autor: 'Sistema'
+      });
+    }
+    return base;
+  }
+
+  const handleAgregarNota = (e) => {
+    e.preventDefault();
+    if (!lead || !nuevaNotaTexto.trim()) return;
+
+    const currentLeadNotas = notasMap[lead.id] || getLeadNotas(lead);
+    const nuevaNota = {
+      id: `n-${Date.now()}`,
+      categoria: nuevaCategoriaNota,
+      texto: nuevaNotaTexto.trim(),
+      fecha: new Date().toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      autor: 'Staff Origen Spa'
+    };
+
+    const updated = [nuevaNota, ...currentLeadNotas];
+    setNotasMap(prev => ({ ...prev, [lead.id]: updated }));
+    try {
+      localStorage.setItem(`crm_notas_${lead.id}`, JSON.stringify(updated));
+    } catch (_) {}
+
+    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, notas: nuevaNotaTexto.trim() } : l));
+
+    registrarEventoHistorial(lead.id, {
+      tipo: 'Nota',
+      titulo: `Nota interna (${nuevaCategoriaNota})`,
+      detalle: nuevaNotaTexto.trim(),
+      autor: 'Staff Origen Spa'
+    });
+
+    setNuevaNotaTexto("");
+    show("✅ Nota guardada exitosamente");
+  };
+
+  const handleEliminarNota = (notaId) => {
+    if (!lead) return;
+    const current = notasMap[lead.id] || getLeadNotas(lead);
+    const updated = current.filter(n => n.id !== notaId);
+    setNotasMap(prev => ({ ...prev, [lead.id]: updated }));
+    try {
+      localStorage.setItem(`crm_notas_${lead.id}`, JSON.stringify(updated));
+    } catch (_) {}
+    show("Nota eliminada");
+  };
+
+  // --- GESTIÓN DE ACTIVIDADES ---
+  function getLeadActividades(leadItem) {
+    if (!leadItem) return [];
+    if (actividadesMap[leadItem.id]) {
+      return actividadesMap[leadItem.id];
+    }
+    try {
+      const stored = localStorage.getItem(`crm_actividades_${leadItem.id}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+
+    return [
+      {
+        id: `act-1-${leadItem.id}`,
+        titulo: `Llamada para coordinar horario (${leadItem.gustos?.horario || 'Turno preferido'})`,
+        tipo: 'Llamada',
+        fechaProgramada: 'Mañana 10:30 AM',
+        prioridad: leadItem.score >= 70 ? 'Alta' : 'Media',
+        completada: false
+      },
+      {
+        id: `act-2-${leadItem.id}`,
+        titulo: `Enviar confirmación de protocolo de cabina privada por WhatsApp`,
+        tipo: 'WhatsApp',
+        fechaProgramada: 'En 48 horas',
+        prioridad: 'Media',
+        completada: false
+      },
+      {
+        id: `act-3-${leadItem.id}`,
+        titulo: `Validación de insumos orgánicos para piel ${leadItem.gustos?.tipoPiel || 'del cliente'}`,
+        tipo: 'Tarea',
+        fechaProgramada: 'Previo a cita',
+        prioridad: 'Normal',
+        completada: true
+      }
+    ];
+  }
+
+  const handleAgregarActividad = (e) => {
+    e.preventDefault();
+    if (!lead || !nuevoTituloActividad.trim()) return;
+
+    const currentActs = actividadesMap[lead.id] || getLeadActividades(lead);
+    const nuevaAct = {
+      id: `act-${Date.now()}`,
+      titulo: nuevoTituloActividad.trim(),
+      tipo: nuevoTipoActividad,
+      fechaProgramada: nuevaFechaActividad.trim() || 'Por coordinar',
+      prioridad: nuevaPrioridadActividad,
+      completada: false
+    };
+
+    const updated = [nuevaAct, ...currentActs];
+    setActividadesMap(prev => ({ ...prev, [lead.id]: updated }));
+    try {
+      localStorage.setItem(`crm_actividades_${lead.id}`, JSON.stringify(updated));
+    } catch (_) {}
+
+    setNuevoTituloActividad("");
+    setNuevaFechaActividad("");
+    show("✅ Actividad programada con éxito");
+  };
+
+  const handleToggleActividad = (actId) => {
+    if (!lead) return;
+    const current = actividadesMap[lead.id] || getLeadActividades(lead);
+    const updated = current.map(a => a.id === actId ? { ...a, completada: !a.completada } : a);
+    setActividadesMap(prev => ({ ...prev, [lead.id]: updated }));
+    try {
+      localStorage.setItem(`crm_actividades_${lead.id}`, JSON.stringify(updated));
+    } catch (_) {}
+    show("Estado de actividad actualizado");
+  };
+
+  const handleEliminarActividad = (actId) => {
+    if (!lead) return;
+    const current = actividadesMap[lead.id] || getLeadActividades(lead);
+    const updated = current.filter(a => a.id !== actId);
+    setActividadesMap(prev => ({ ...prev, [lead.id]: updated }));
+    try {
+      localStorage.setItem(`crm_actividades_${lead.id}`, JSON.stringify(updated));
+    } catch (_) {}
+    show("Actividad eliminada");
+  };
+
+  const handleAutomatizarSeguimiento = () => {
+    if (!lead) return;
+    const nuevaActividad = {
+      id: `auto-${Date.now()}`,
+      titulo: `Seguimiento automatizado: Enviar recordatorio interactivo de propuesta para ${fn} vía WhatsApp`,
+      tipo: 'WhatsApp',
+      fechaProgramada: 'En 24 horas',
+      prioridad: 'Alta',
+      completada: false,
+      automatica: true
+    };
+    
+    const currentActs = actividadesMap[lead.id] || getLeadActividades(lead);
+    const updated = [nuevaActividad, ...currentActs];
+    setActividadesMap(prev => ({ ...prev, [lead.id]: updated }));
+    try {
+      localStorage.setItem(`crm_actividades_${lead.id}`, JSON.stringify(updated));
+    } catch (_) {}
+
+    registrarEventoHistorial(lead.id, {
+      tipo: 'Sistema',
+      titulo: 'Seguimiento automatizado programado por Agente IA',
+      detalle: `Se programó tarea de seguimiento en 24h para contactar a ${fn} por WhatsApp con propuesta ${lead.propuesta?.nombre}.`,
+      autor: 'Agente IA'
+    });
+
+    show("🤖 Seguimiento automatizado activado: Tarea creada en Actividades");
+  };
+
+  // --- GENERACIÓN DE PROPUESTAS (IA MISTRAL O CATÁLOGO RÁPIDO) ---
+  const handleGenerarNuevaPropuesta = async (usarIA = true) => {
+    if (!lead || generatingProposal) return;
+
+    if (usarIA) {
+      setGeneratingProposal(true);
+      show("✨ Consultando a Mistral AI con los datos recopilados...");
+      try {
+        const leadData = {
+          nombre: lead.perfil.nombre,
+          edad: lead.perfil.edad,
+          distrito: lead.perfil.distrito,
+          interes: lead.gustos.tratamiento || lead.interes || lead.servicio,
+          tipoPiel: lead.gustos.tipoPiel,
+          aroma: lead.gustos.aroma,
+          musica: lead.gustos.musica,
+          temperatura: lead.gustos.temperatura,
+          horario: lead.gustos.horario,
+          otrasPreferencias: lead.gustos.otras,
+          motivo: lead.otros.observaciones,
+          cargo: lead.laboral.cargo,
+          empresa: lead.laboral.empresa,
+          especialidad: lead.estudiante.especialidad,
+          score: lead.score
+        };
+
+        const result = await generarPropuestaConMistral(leadData);
+        if (result.success && result.propuesta) {
+          const nuevaPropuesta = {
+            ...result.propuesta,
+            aceptada: false,
+            fecha_aceptacion: null
+          };
+          const porQueNuevos = result.porQue || [
+            `Diseñado especialmente para su perfil de ${lead.interes}.`,
+            `Incorpora sus notas sensoriales preferidas (${lead.gustos.aroma || 'aromaterapia'}).`,
+            `Excelente tarifa de bienvenida con atención personalizada garantizada.`
+          ];
+
+          setLeads(prev => prev.map(l => {
+            if (l.id === lead.id) {
+              return {
+                ...l,
+                propuesta: nuevaPropuesta,
+                porQue: porQueNuevos
+              };
+            }
+            return l;
+          }));
+
+          actualizarLead(lead.id, null, {
+            datos_propuesta: nuevaPropuesta,
+            propuesta_aceptada: false
+          }).catch(err => {
+            logger.warn('LeadsStaffPage', 'Aviso guardando propuesta en background:', { err });
+          });
+
+          registrarEventoHistorial(lead.id, {
+            tipo: 'Propuesta',
+            titulo: `Propuesta generada con ${result.motor || 'IA Mistral'}`,
+            detalle: `${nuevaPropuesta.nombre} — ${nuevaPropuesta.precioEspecial} (${nuevaPropuesta.duracion}). Adaptada a sus preferencias de aroma, música y piel.`,
+            autor: result.motor || 'Mistral AI'
+          });
+
+          show(`✨ Propuesta generada con ${result.motor || 'IA Mistral'}: ${nuevaPropuesta.nombre}`);
+          setGeneratingProposal(false);
+          return;
+        }
+      } catch (err) {
+        logger.error('LeadsStaffPage', 'Error generando propuesta con IA:', { err });
+      } finally {
+        setGeneratingProposal(false);
+      }
+    }
+
+    // Catálogo rápido de rotación determinística
+    ejecutarRotacionCatalogo();
+  };
+
+  const ejecutarRotacionCatalogo = () => {
+    if (!lead) return;
+
+    const interes = (lead.interes || lead.servicio || 'facial').toLowerCase();
+    const nombreLead = lead.nombre ? lead.nombre.split(' ')[0] : 'Cliente';
+    const tieneEnriquecimiento = Boolean(lead.otros?.enriquecimientoCompletado);
+    const aroma = lead.gustos?.aroma || 'Lavanda';
+    const musica = lead.gustos?.musica || 'Relajante';
+    const tipoPiel = lead.gustos?.tipoPiel ? `para piel ${lead.gustos.tipoPiel.toLowerCase()}` : '';
+    const tempAgua = lead.gustos?.temperatura || 'Templada';
+
+    const CATALOGO_PAQUETES = {
+      facial: [
+        {
+          nombre: `Ritual Facial Glow & Hidratación Profunda`,
+          desc: `Diseñado para ${nombreLead} ${tipoPiel}, incluye evaluación dérmica, extracción ultrasónica, mascarilla de colágeno y sueros antioxidantes.`,
+          tags: ["Facial", "Hidratación", "Piel Radiante"],
+          duracion: "75 min",
+          precioRegular: "S/ 190.00",
+          precioEspecial: "S/ 145.00",
+          ahorro: "S/ 45.00",
+          descuento: "24%",
+          incluye: `Diagnóstico dérmico computarizado, limpieza profunda, mascarilla adaptada a su piel, masaje facial linfático y protección solar mineral.`
+        },
+        {
+          nombre: `Plan Facial Rejuvenecedor & Anti-Fatiga`,
+          desc: `Terapia facial intensiva con ácido hialurónico puro, radiofrecuencia suave y crioterapia calmante para revitalizar el rostro de ${nombreLead}.`,
+          tags: ["Anti-Edad", "Lifting", "Especial"],
+          duracion: "90 min",
+          precioRegular: "S/ 230.00",
+          precioEspecial: "S/ 175.00",
+          ahorro: "S/ 55.00",
+          descuento: "24%",
+          incluye: `Higiene facial médica, suero hialurónico concentrado, radiofrecuencia reafirmante, velo de colágeno y crema de seda.`
+        },
+        {
+          nombre: `Sesión Express Detox Facial Purificante`,
+          desc: `Sesión ágil y efectiva para purificar poros en profundidad y devolver luminosidad inmediata sin agredir la piel.`,
+          tags: ["Express", "Limpieza", "Acceso Rápido"],
+          duracion: "50 min",
+          precioRegular: "S/ 130.00",
+          precioEspecial: "S/ 99.00",
+          ahorro: "S/ 31.00",
+          descuento: "24%",
+          incluye: `Exfoliación suave, vapor de ozono, extracción focalizada y mascarilla refrescante descongestiva.`
+        },
+        {
+          nombre: `Ritual Facial Antiox Vitamina C & Oro Coloidal`,
+          desc: `Tratamiento iluminador premium que neutraliza el daño celular y aporta tersura y vitalidad inmediata al cutis.`,
+          tags: ["Iluminador", "Vitamina C", "Premium"],
+          duracion: "80 min",
+          precioRegular: "S/ 210.00",
+          precioEspecial: "S/ 159.00",
+          ahorro: "S/ 51.00",
+          descuento: "24%",
+          incluye: `Microdermoabrasión suave con punta de diamante, ampolla concentrada de Vitamina C estabilizada, mascarilla hidroplástica y masaje kobido.`
+        }
+      ],
+      corporal: [
+        {
+          nombre: `Ritual Envoltura Corporal Desintoxicante & Firmeza`,
+          desc: `Experiencia corporal completa con exfoliación botánica de sales minerales y envoltura mineralizante de lodo volcánico.`,
+          tags: ["Corporal", "Detox", "Renovación"],
+          duracion: "80 min",
+          precioRegular: "S/ 180.00",
+          precioEspecial: "S/ 139.00",
+          ahorro: "S/ 41.00",
+          descuento: "23%",
+          incluye: `Exfoliación botánica de cuerpo completo, envoltura desintoxicante, ducha sensorial a temperatura ${tempAgua.toLowerCase()} y emulsión hidratante selladora.`
+        },
+        {
+          nombre: `Circuito Reductor & Drenaje Linfático Activo`,
+          desc: `Terapia combinada para desinflamar, modelar el contorno corporal y activar la microcirculación linfática.`,
+          tags: ["Drenaje", "Modelador", "Bienestar"],
+          duracion: "70 min",
+          precioRegular: "S/ 200.00",
+          precioEspecial: "S/ 150.00",
+          ahorro: "S/ 50.00",
+          descuento: "25%",
+          incluye: `Drenaje linfático manual especializado, gel criogénico reafirmante, presoterapia secuencial y plan de hidratación botánica.`
+        },
+        {
+          nombre: `Exfoliación Sensorial con Sales Termales & Cacao`,
+          desc: `Renovación epidérmica profunda enriquecida con manteca de cacao pura y aceites nutritivos para una piel sedosa y nutrida.`,
+          tags: ["Exfoliación", "Nutrición", "Sensorial"],
+          duracion: "60 min",
+          precioRegular: "S/ 160.00",
+          precioEspecial: "S/ 120.00",
+          ahorro: "S/ 40.00",
+          descuento: "25%",
+          incluye: `Pulido corporal con sales termales marinas, envoltura tibia de cacao nutritivo, hidroterapia y masaje relajante ligero.`
+        },
+        {
+          nombre: `Tratamiento Corporal Modelador & Tonificante Pro`,
+          desc: `Protocolo intensivo enfocado en firmeza y tonificación de zonas localizadas con fitocomplejos activos.`,
+          tags: ["Tonificante", "Firmeza", "Pro"],
+          duracion: "75 min",
+          precioRegular: "S/ 220.00",
+          precioEspecial: "S/ 165.00",
+          ahorro: "S/ 55.00",
+          descuento: "25%",
+          incluye: `Exfoliación focalizada, masaje reductor modelador manual, aparatología reafirmante y crema tensora de cafeína botánica.`
+        }
+      ],
+      relajacion: [
+        {
+          nombre: `Ritual de Relajación Profunda con Aromaterapia`,
+          desc: `Sesión multisensorial personalizada con aceites esenciales de ${aroma}, ambientación con ${musica.toLowerCase()} y toallas térmicas.`,
+          tags: ["Relajación", "Anti-Estrés", "Aromaterapia"],
+          duracion: "80 min",
+          precioRegular: "S/ 180.00",
+          precioEspecial: "S/ 135.00",
+          ahorro: "S/ 45.00",
+          descuento: "25%",
+          incluye: `Masaje relajante en cuerpo completo, aceites tibios esenciales de ${aroma}, compresa cervical térmica y té botánico al finalizar.`
+        },
+        {
+          nombre: `Terapia Descontracturante & Piedras Calientes`,
+          desc: `Enfoque terapéutico en espalda, cuello y hombros para liberar sobrecargas musculares, contracturas y fatiga postural de ${nombreLead}.`,
+          tags: ["Descontracturante", "Piedras Calientes", "Terapéutico"],
+          duracion: "90 min",
+          precioRegular: "S/ 210.00",
+          precioEspecial: "S/ 160.00",
+          ahorro: "S/ 50.00",
+          descuento: "24%",
+          incluye: `Masaje deep-tissue localizado, colocación de piedras volcánicas basálticas a temperatura controlada y bálsamo herbal reconfortante.`
+        },
+        {
+          nombre: `Masaje Deep-Tissue & Alivio Cervico-Dorsal`,
+          desc: `Presión profunda dirigida a nudos musculares y rigidez acumulada por jornadas de trabajo prolongadas.`,
+          tags: ["Deep-Tissue", "Cervical", "Espalda"],
+          duracion: "60 min",
+          precioRegular: "S/ 170.00",
+          precioEspecial: "S/ 129.00",
+          ahorro: "S/ 41.00",
+          descuento: "24%",
+          incluye: `Técnicas miofasciales de descompresión muscular, ventosa suave localizada, toallas tibias con esencias y estiramientos asistidos.`
+        },
+        {
+          nombre: `Experiencia Holística Sensorial Origen Spa`,
+          desc: `El ritual insignia del spa: combinación armónica de reflexología, masaje corporal sedativo y aromaterapia de lavanda y cítricos.`,
+          tags: ["Insignia", "Holístico", "VIP"],
+          duracion: "100 min",
+          precioRegular: "S/ 240.00",
+          precioEspecial: "S/ 180.00",
+          ahorro: "S/ 60.00",
+          descuento: "25%",
+          incluye: `Bienvenida podal con sales relajantes, masaje integral cuerpo completo, masaje craneal hindú y degustación de infusión orgánica.`
+        }
+      ],
+      terapeutico: [
+        {
+          nombre: `Sesión Reflexología Podal & Bienestar Integral`,
+          desc: `Estimulación de zonas reflejas podales para desbloquear canales energéticos y calmar el sistema nervioso central.`,
+          tags: ["Reflexología", "Alivio", "Natural"],
+          duracion: "60 min",
+          precioRegular: "S/ 140.00",
+          precioEspecial: "S/ 105.00",
+          ahorro: "S/ 35.00",
+          descuento: "25%",
+          incluye: `Baño podal con sales de magnesio y aceites botánicos, digitopresión en puntos reflejos clave, masaje calmante de piernas y té digestivo.`
+        },
+        {
+          nombre: `Circuito Terapéutico Anti-Estrés Ejecutivo`,
+          desc: `Protocolo rápido y contundente diseñado para personas con alta carga mental y muscular acumulada.`,
+          tags: ["Ejecutivo", "Anti-Estrés", "Rápido"],
+          duracion: "70 min",
+          precioRegular: "S/ 190.00",
+          precioEspecial: "S/ 145.00",
+          ahorro: "S/ 45.00",
+          descuento: "24%",
+          incluye: `Masaje focalizado en trapecio y zona lumbar, terapia con piedras calientes, aromaterapia respiratoria de eucalipto y compresa ocular de lavanda.`
+        },
+        {
+          nombre: `Terapia de Armonización & Drenaje Corporal`,
+          desc: `Equilibrio corporal mediante movimientos rítmicos sedantes que estimulan el retorno circulatorio y la relajación profunda.`,
+          tags: ["Armonización", "Drenaje", "Salud"],
+          duracion: "75 min",
+          precioRegular: "S/ 180.00",
+          precioEspecial: "S/ 135.00",
+          ahorro: "S/ 45.00",
+          descuento: "25%",
+          incluye: `Drenaje manual suave, aceites tibios calmantes, compresas térmicas cervicales y sesión de descanso en sala sensorial.`
+        }
+      ]
+    };
+
+    let categoria = 'facial';
+    if (interes.includes('corporal') || interes.includes('envoltura') || interes.includes('exfolia') || interes.includes('reductor')) {
+      categoria = 'corporal';
+    } else if (interes.includes('reflex') || interes.includes('podal') || interes.includes('terapeut')) {
+      categoria = 'terapeutico';
+    } else if (interes.includes('masaje') || interes.includes('relaj') || interes.includes('piedras') || interes.includes('contract')) {
+      categoria = 'relajacion';
+    }
+
+    const opciones = CATALOGO_PAQUETES[categoria] || CATALOGO_PAQUETES.facial;
+    const propActual = lead.propuesta?.nombre || '';
+    const actualIdx = opciones.findIndex(op => op.nombre === propActual);
+    const nextIdx = actualIdx >= 0 ? (actualIdx + 1) % opciones.length : 0;
+    const nuevaOpcion = opciones[nextIdx];
+
+    const porQueActualizados = [
+      `Alineado a su interés principal en tratamientos de ${interes}.`,
+      tieneEnriquecimiento && lead.gustos?.aroma 
+        ? `Incorpora sus notas sensoriales y aroma preferido (${aroma}).` 
+        : `Ideal para quienes buscan resultados notables y relajación desde la 1era cita.`,
+      tieneEnriquecimiento && lead.gustos?.horario 
+        ? `Horario adaptable a su disponibilidad (${lead.gustos.horario}).` 
+        : `Excelente relación de valor con 24% - 25% de beneficio de bienvenida.`
+    ];
+
+    const propuestaCompleta = {
+      ...nuevaOpcion,
+      aceptada: false,
+      fecha_aceptacion: null
+    };
+
+    setLeads(prev => prev.map(l => {
+      if (l.id === lead.id) {
+        return {
+          ...l,
+          propuesta: propuestaCompleta,
+          porQue: porQueActualizados
+        };
+      }
+      return l;
+    }));
+
+    actualizarLead(lead.id, null, {
+      datos_propuesta: nuevaOpcion,
+      propuesta_aceptada: false
+    }).catch(err => {
+      logger.warn('LeadsStaffPage', 'Aviso guardando propuesta en background:', { err });
+    });
+
+    registrarEventoHistorial(lead.id, {
+      tipo: 'Propuesta',
+      titulo: `Propuesta actualizada del catálogo: ${nuevaOpcion.nombre}`,
+      detalle: `${nuevaOpcion.desc} Precio especial: ${nuevaOpcion.precioEspecial}.`,
+      autor: 'Staff Origen Spa'
+    });
+
+    show(`🔄 Propuesta del catálogo seleccionada: ${nuevaOpcion.nombre}`);
   };
 
   const handleSaveChanges = async () => {
@@ -402,12 +979,13 @@ export default function LeadsStaffPage() {
       };
 
       const datosPropuesta = {
-        servicio: lead.interes || lead.propuesta?.nombre || 'Servicio general',
+        servicio: lead.propuesta?.nombre || lead.interes || 'Servicio personalizado',
         precio: cleanNum(lead.propuesta?.precioEspecial, 120),
         precioRegular: cleanNum(lead.propuesta?.precioRegular, 150),
         duracion: lead.propuesta?.duracion || '60 min',
         descuento: lead.propuesta?.descuento || '0%',
-        incluye: lead.propuesta?.incluye || 'Evaluación inicial, tratamiento y seguimiento'
+        incluye: lead.propuesta?.incluye || 'Evaluación inicial, tratamiento y seguimiento',
+        descripcion: lead.propuesta?.desc || 'Propuesta personalizada de Origen Spa'
       };
 
       const result = await enviarEmailPropuestaConChatbot(lead.id, emailCliente, nombreCliente, datosPropuesta);
@@ -622,22 +1200,55 @@ export default function LeadsStaffPage() {
           {/* ── TAB: PERFIL (CAMPOS REACTIVOS) ── */}
           {tab === "Perfil" && (
             <>
+              {/* Alerta de estado si el formulario no ha sido completado */}
+              {!lead.otros.enriquecimientoCompletado && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'rgba(200, 155, 92, 0.12)',
+                  border: '1px solid rgba(200, 155, 92, 0.35)',
+                  borderRadius: '6px',
+                  padding: '1rem 1.4rem',
+                  marginBottom: '1.5rem',
+                  gap: '1rem',
+                  flexWrap: 'wrap'
+                }}>
+                  <div>
+                    <strong style={{ color: 'var(--color-accent)', display: 'block', fontSize: '0.95rem', marginBottom: '0.2rem' }}>
+                      📋 Formulario de Enriquecimiento Pendiente
+                    </strong>
+                    <p style={{ color: 'var(--color-ink-muted)', fontSize: '0.8rem', margin: 0 }}>
+                      Este usuario solo ha enviado el formulario básico inicial de la página pública (Buyers). Los campos detallados de gustos, educación y ámbito laboral se habilitarán una vez que complete el formulario enviado por email.
+                    </p>
+                  </div>
+                  <button 
+                    className="ln-btn-ghost" 
+                    onClick={handleEnviarEnriquecimiento}
+                    style={{ background: 'var(--color-accent)', color: 'var(--color-ink-on-contrast)', border: 'none', fontWeight: '600' }}
+                  >
+                    <IcoSend/> Enviar Formulario por Email
+                  </button>
+                </div>
+              )}
+
               <div className="ln-grid-2">
                 
-                {/* Datos Personales */}
+                {/* Datos Captados en Buyers (Siempre visibles) */}
                 <article className="ln-card">
-                  <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Datos Personales</h3>
+                  <h3 className="ln-card-title" style={{marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                    <span>Datos de Captación (Buyers)</span>
+                    <span style={{ fontSize: '0.65rem', background: 'rgba(183, 210, 185, 0.2)', color: '#b7d2b9', padding: '0.15rem 0.5rem', borderRadius: '12px' }}>
+                      Verificado
+                    </span>
+                  </h3>
                   <div className="ln-form-grid">
                     <div className="ln-form-group">
                       <label>Nombre completo:</label>
                       <input type="text" value={lead.perfil.nombre || ""} onChange={e => handleFieldChange('perfil', 'nombre', e.target.value)} className="ln-input" />
                     </div>
                     <div className="ln-form-group">
-                      <label>Edad:</label>
-                      <input type="text" value={lead.perfil.edad || ""} onChange={e => handleFieldChange('perfil', 'edad', e.target.value)} className="ln-input" />
-                    </div>
-                    <div className="ln-form-group">
-                      <label>Teléfono:</label>
+                      <label>Teléfono / WhatsApp:</label>
                       <input type="text" value={lead.perfil.telefono || ""} onChange={e => handleFieldChange('perfil', 'telefono', e.target.value)} className="ln-input" />
                     </div>
                     <div className="ln-form-group">
@@ -645,121 +1256,129 @@ export default function LeadsStaffPage() {
                       <input type="email" value={lead.perfil.email || ""} onChange={e => handleFieldChange('perfil', 'email', e.target.value)} className="ln-input" />
                     </div>
                     <div className="ln-form-group">
-                      <label>Distrito:</label>
-                      <input type="text" value={lead.perfil.distrito || ""} onChange={e => handleFieldChange('perfil', 'distrito', e.target.value)} className="ln-input" />
+                      <label>Interés inicial:</label>
+                      <input type="text" value={lead.gustos.tratamiento || lead.servicio || ""} readOnly className="ln-input" style={{ background: 'rgba(243,238,226,0.05)' }} />
                     </div>
+                    {lead.gustos.tipoPiel && (
+                      <div className="ln-form-group">
+                        <label>Tipo de piel:</label>
+                        <input type="text" value={lead.gustos.tipoPiel} readOnly className="ln-input" style={{ background: 'rgba(243,238,226,0.05)' }} />
+                      </div>
+                    )}
+                    {lead.otros.enriquecimientoCompletado && (
+                      <>
+                        <div className="ln-form-group">
+                          <label>Edad:</label>
+                          <input type="text" value={lead.perfil.edad || ""} onChange={e => handleFieldChange('perfil', 'edad', e.target.value)} className="ln-input" />
+                        </div>
+                        <div className="ln-form-group">
+                          <label>Distrito:</label>
+                          <input type="text" value={lead.perfil.distrito || ""} onChange={e => handleFieldChange('perfil', 'distrito', e.target.value)} className="ln-input" />
+                        </div>
+                      </>
+                    )}
                   </div>
                 </article>
 
-                {/* Gustos y Preferencias */}
-                <article className="ln-card">
-                  <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Gustos y Preferencias</h3>
-                  <div className="ln-form-grid">
-                    <div className="ln-form-group">
-                      <label>Tratamiento de interés:</label>
-                      <select value={lead.gustos.tratamiento || ""} onChange={e => handleFieldChange('gustos', 'tratamiento', e.target.value)} className="ln-input">
-                        <option value={lead.gustos.tratamiento}>{lead.gustos.tratamiento}</option>
-                        <option value="Tratamiento corporal">Tratamiento corporal</option>
-                        <option value="Masajes relajantes">Masajes relajantes</option>
-                      </select>
-                    </div>
-                    <div className="ln-form-group">
-                      <label>Aroma preferido:</label>
-                      <select value={lead.gustos.aroma || ""} onChange={e => handleFieldChange('gustos', 'aroma', e.target.value)} className="ln-input">
-                        <option value="Lavanda">Lavanda</option>
-                        <option value="Cítrico">Cítrico</option>
-                        <option value="Eucalipto">Eucalipto</option>
-                        <option value="Vainilla">Vainilla</option>
-                      </select>
-                    </div>
-                    <div className="ln-form-group">
-                      <label>Música preferida:</label>
-                      <select value={lead.gustos.musica || ""} onChange={e => handleFieldChange('gustos', 'musica', e.target.value)} className="ln-input">
-                        <option value="Música relajante">Música relajante</option>
-                        <option value="Sonidos de la naturaleza">Sonidos de la naturaleza</option>
-                        <option value="Piano instrumental">Piano instrumental</option>
-                      </select>
-                    </div>
-                    <div className="ln-form-group">
-                      <label>Horario preferido:</label>
-                      <select value={lead.gustos.horario || ""} onChange={e => handleFieldChange('gustos', 'horario', e.target.value)} className="ln-input">
-                        <option value="Sábados, tarde">Sábados, tarde</option>
-                        <option value="Lunes a Viernes, mañana">Lunes a Viernes, mañana</option>
-                        <option value="Lunes a Viernes, noche">Lunes a Viernes, noche</option>
-                      </select>
-                    </div>
-                    <div className="ln-form-group">
-                      <label>Temperatura del agua:</label>
-                      <select value={lead.gustos.temperatura || ""} onChange={e => handleFieldChange('gustos', 'temperatura', e.target.value)} className="ln-input">
-                        <option value="Templada">Templada</option>
-                        <option value="Caliente">Caliente</option>
-                        <option value="Fría">Fría</option>
-                      </select>
-                    </div>
-                    <div className="ln-form-group" style={{alignItems: 'flex-start'}}>
-                      <label style={{marginTop: '0.4rem'}}>Otras preferencias:</label>
-                      <textarea value={lead.gustos.otras || ""} onChange={e => handleFieldChange('gustos', 'otras', e.target.value)} className="ln-input" style={{height: '60px', resize: 'none'}} />
-                    </div>
-                  </div>
-                </article>
+                {/* Si no está completado, mostrar tarjeta informativa o los campos solo si está completado */}
+                {lead.otros.enriquecimientoCompletado ? (
+                  <>
+                    {/* Gustos y Preferencias (Enriquecido) */}
+                    <article className="ln-card">
+                      <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Gustos y Preferencias</h3>
+                      <div className="ln-form-grid">
+                        <div className="ln-form-group">
+                          <label>Tratamiento de interés:</label>
+                          <select value={lead.gustos.tratamiento || ""} onChange={e => handleFieldChange('gustos', 'tratamiento', e.target.value)} className="ln-input">
+                            <option value={lead.gustos.tratamiento}>{lead.gustos.tratamiento}</option>
+                            <option value="Tratamiento corporal">Tratamiento corporal</option>
+                            <option value="Masajes relajantes">Masajes relajantes</option>
+                            <option value="Tratamiento facial">Tratamiento facial</option>
+                          </select>
+                        </div>
+                        <div className="ln-form-group">
+                          <label>Aroma preferido:</label>
+                          <input type="text" value={lead.gustos.aroma || ""} onChange={e => handleFieldChange('gustos', 'aroma', e.target.value)} className="ln-input" />
+                        </div>
+                        <div className="ln-form-group">
+                          <label>Música preferida:</label>
+                          <input type="text" value={lead.gustos.musica || ""} onChange={e => handleFieldChange('gustos', 'musica', e.target.value)} className="ln-input" />
+                        </div>
+                        <div className="ln-form-group">
+                          <label>Horario preferido:</label>
+                          <input type="text" value={lead.gustos.horario || ""} onChange={e => handleFieldChange('gustos', 'horario', e.target.value)} className="ln-input" />
+                        </div>
+                        <div className="ln-form-group">
+                          <label>Temperatura del agua:</label>
+                          <input type="text" value={lead.gustos.temperatura || ""} onChange={e => handleFieldChange('gustos', 'temperatura', e.target.value)} className="ln-input" />
+                        </div>
+                        <div className="ln-form-group" style={{alignItems: 'flex-start'}}>
+                          <label style={{marginTop: '0.4rem'}}>Otras preferencias:</label>
+                          <textarea value={lead.gustos.otras || ""} onChange={e => handleFieldChange('gustos', 'otras', e.target.value)} className="ln-input" style={{height: '60px', resize: 'none'}} />
+                        </div>
+                      </div>
+                    </article>
 
-                {/* Datos del Estudiante */}
-                <article className="ln-card">
-                  <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Datos del Estudiante</h3>
-                  <div className="ln-form-grid">
-                    <div className="ln-form-group">
-                      <label>Especialidad:</label>
-                      <select value={lead.estudiante.especialidad || ""} onChange={e => handleFieldChange('estudiante', 'especialidad', e.target.value)} className="ln-input">
-                        <option value="Administración">Administración</option>
-                        <option value="Ingeniería">Ingeniería</option>
-                        <option value="Medicina">Medicina</option>
-                        <option value="Otro">Otro</option>
-                      </select>
-                    </div>
-                    <div className="ln-form-group">
-                      <label>Nivel:</label>
-                      <select value={lead.estudiante.nivel || ""} onChange={e => handleFieldChange('estudiante', 'nivel', e.target.value)} className="ln-input">
-                        <option value="8vo ciclo">8vo ciclo</option>
-                        <option value="Egresado">Egresado</option>
-                      </select>
-                    </div>
-                    <div className="ln-form-group">
-                      <label>Universidad:</label>
-                      <select value={lead.estudiante.universidad || ""} onChange={e => handleFieldChange('estudiante', 'universidad', e.target.value)} className="ln-input">
-                        <option value="UPN">UPN</option>
-                        <option value="UCV">UCV</option>
-                        <option value="UNT">UNT</option>
-                      </select>
-                    </div>
-                  </div>
-                </article>
+                    {/* Datos del Estudiante (Enriquecido) */}
+                    <article className="ln-card">
+                      <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Datos de Estudios / Formación</h3>
+                      <div className="ln-form-grid">
+                        <div className="ln-form-group">
+                          <label>Especialidad / Carrera:</label>
+                          <input type="text" value={lead.estudiante.especialidad || ""} onChange={e => handleFieldChange('estudiante', 'especialidad', e.target.value)} className="ln-input" />
+                        </div>
+                        <div className="ln-form-group">
+                          <label>Nivel:</label>
+                          <input type="text" value={lead.estudiante.nivel || ""} onChange={e => handleFieldChange('estudiante', 'nivel', e.target.value)} className="ln-input" />
+                        </div>
+                        <div className="ln-form-group">
+                          <label>Universidad / Instituto:</label>
+                          <input type="text" value={lead.estudiante.universidad || ""} onChange={e => handleFieldChange('estudiante', 'universidad', e.target.value)} className="ln-input" />
+                        </div>
+                      </div>
+                    </article>
 
-                {/* Datos Laborales */}
-                <article className="ln-card">
-                  <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Datos Laborales</h3>
-                  <div className="ln-form-grid">
-                    <div className="ln-form-group">
-                      <label>Empresa:</label>
-                      <input type="text" value={lead.laboral.empresa || ""} onChange={e => handleFieldChange('laboral', 'empresa', e.target.value)} className="ln-input" />
-                    </div>
-                    <div className="ln-form-group">
-                      <label>Cargo:</label>
-                      <input type="text" value={lead.laboral.cargo || ""} onChange={e => handleFieldChange('laboral', 'cargo', e.target.value)} className="ln-input" />
-                    </div>
-                    <div className="ln-form-group">
-                      <label>Situación laboral:</label>
-                      <select value={lead.laboral.situacion || ""} onChange={e => handleFieldChange('laboral', 'situacion', e.target.value)} className="ln-input">
-                        <option value="Actualmente trabajando">Actualmente trabajando</option>
-                        <option value="Desempleado">Desempleado</option>
-                        <option value="Independiente">Independiente</option>
-                      </select>
-                    </div>
-                  </div>
-                </article>
+                    {/* Datos Laborales (Enriquecido) */}
+                    <article className="ln-card">
+                      <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Datos Laborales</h3>
+                      <div className="ln-form-grid">
+                        <div className="ln-form-group">
+                          <label>Empresa:</label>
+                          <input type="text" value={lead.laboral.empresa || ""} onChange={e => handleFieldChange('laboral', 'empresa', e.target.value)} className="ln-input" />
+                        </div>
+                        <div className="ln-form-group">
+                          <label>Cargo:</label>
+                          <input type="text" value={lead.laboral.cargo || ""} onChange={e => handleFieldChange('laboral', 'cargo', e.target.value)} className="ln-input" />
+                        </div>
+                        <div className="ln-form-group">
+                          <label>Situación laboral:</label>
+                          <input type="text" value={lead.laboral.situacion || ""} onChange={e => handleFieldChange('laboral', 'situacion', e.target.value)} className="ln-input" />
+                        </div>
+                      </div>
+                    </article>
+                  </>
+                ) : (
+                  <article className="ln-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '2.5rem 1.5rem', background: 'rgba(22, 35, 28, 0.4)', borderStyle: 'dashed' }}>
+                    <div style={{ fontSize: '2.2rem', marginBottom: '0.8rem', opacity: 0.7 }}>🔒</div>
+                    <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', color: 'var(--color-accent)', marginBottom: '0.5rem' }}>
+                      Campos de Perfil en Espera
+                    </h3>
+                    <p style={{ color: 'var(--color-ink-muted)', fontSize: '0.82rem', maxWidth: '380px', lineHeight: 1.5, marginBottom: '1.2rem' }}>
+                      Las secciones de <strong>Gustos y Preferencias</strong>, <strong>Estudios</strong> y <strong>Datos Laborales</strong> permanecen ocultas y vacías hasta que el usuario complete su cuestionario interactivo por correo.
+                    </p>
+                    <button 
+                      className="ln-btn-ghost" 
+                      onClick={handleEnviarEnriquecimiento}
+                      style={{ fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
+                    >
+                      <IcoSend/> Reenviar formulario al correo
+                    </button>
+                  </article>
+                )}
 
                 {/* Otros Datos */}
                 <article className="ln-card ln-span2">
-                  <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Otros Datos</h3>
+                  <h3 className="ln-card-title" style={{marginBottom: '1rem'}}>Seguimiento y Registro</h3>
                   <div className="ln-grid-2">
                     <div className="ln-form-grid">
                       <div className="ln-form-group">
@@ -773,7 +1392,7 @@ export default function LeadsStaffPage() {
                       <div className="ln-form-group">
                         <label>Cita agendada:</label>
                         <div style={{display:'flex', width: '100%', gap:'0.5rem'}}>
-                          <input type="text" value={lead.otros.citaAgendada || ""} onChange={e => handleFieldChange('otros', 'citaAgendada', e.target.value)} className="ln-input" />
+                          <input type="text" value={lead.otros.citaAgendada || ""} onChange={e => handleFieldChange('otros', 'citaAgendada', e.target.value)} className="ln-input" placeholder={lead.otros.enriquecimientoCompletado ? "Pendiente de agendar" : "Pendiente de enriquecimiento"} />
                           <button className="ln-btn-ghost" style={{padding: '0 0.8rem'}}><IcoCal/></button>
                         </div>
                       </div>
@@ -861,17 +1480,8 @@ export default function LeadsStaffPage() {
                       color: '#b7d2b9',
                       fontSize: '0.8rem'
                     }}>
-                      <IcoCheck/> Perfil Completado
+                      <IcoCheck/> Perfil Enriquecido
                     </div>
-                  )}
-                  {lead.otros.enriquecimientoCompletado && (
-                    <button 
-                      className="ln-btn-ghost" 
-                      onClick={handleEnviarPropuestaChatbot}
-                      style={{ background: 'rgba(183, 210, 185, 0.1)', color: '#b7d2b9', border: '1px solid rgba(183, 210, 185, 0.3)' }}
-                    >
-                      <IcoEmail/> Enviar Propuesta con Chatbot
-                    </button>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: '0.8rem' }}>
@@ -897,7 +1507,51 @@ export default function LeadsStaffPage() {
                       </h3>
                       <p className="ln-muted" style={{fontSize:"0.7rem"}}>Diseñada según sus intereses, preferencias y estilo de vida.</p>
                     </div>
-                    <button className="ln-btn-ghost" onClick={() => show("Generando nueva propuesta...")}>Generar otra propuesta</button>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button 
+                        className="ln-btn-primary" 
+                        onClick={() => handleGenerarNuevaPropuesta(true)} 
+                        disabled={generatingProposal}
+                        title="Pedir a la IA Mistral una propuesta diseñada con los datos recopilados del usuario"
+                        style={{ 
+                          fontSize: '0.78rem',
+                          fontWeight: '600',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.45rem 0.85rem',
+                          opacity: generatingProposal ? 0.75 : 1,
+                          cursor: generatingProposal ? 'wait' : 'pointer'
+                        }}
+                      >
+                        {generatingProposal ? (
+                          <>
+                            <span className="spinner" style={{ width: '12px', height: '12px', display: 'inline-block', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></span>
+                            Generando con IA Mistral...
+                          </>
+                        ) : (
+                          <>
+                            <span>✨</span> Generar con IA Mistral
+                          </>
+                        )}
+                      </button>
+                      <button 
+                        className="ln-btn-ghost" 
+                        onClick={() => handleGenerarNuevaPropuesta(false)} 
+                        disabled={generatingProposal}
+                        title="Rotar a la siguiente opción del catálogo de tratamientos de Origen Spa"
+                        style={{ 
+                          background: 'rgba(200, 155, 92, 0.12)', 
+                          borderColor: 'rgba(200, 155, 92, 0.35)', 
+                          color: 'var(--color-accent)', 
+                          fontWeight: '600',
+                          fontSize: '0.78rem',
+                          padding: '0.45rem 0.75rem'
+                        }}
+                      >
+                        🔄 Catálogo Rápido
+                      </button>
+                    </div>
                   </div>
 
                   <div className="ln-prop-body">
@@ -952,25 +1606,64 @@ export default function LeadsStaffPage() {
                     </div>
                   </div>
 
-                  <div className="ln-cta-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem' }}>
+                  <div className="ln-cta-row" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.8rem' }}>
+                    {lead.propuesta?.aceptada ? (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.6rem 1.2rem',
+                        background: 'rgba(183, 210, 185, 0.2)',
+                        border: '1px solid rgba(183, 210, 185, 0.5)',
+                        borderRadius: '4px',
+                        color: '#b7d2b9',
+                        fontWeight: '600',
+                        fontSize: '0.85rem'
+                      }}>
+                        <IcoCheck/> Propuesta aprobada por el cliente vía Email
+                      </div>
+                    ) : (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.55rem 1rem',
+                        background: 'rgba(200, 155, 92, 0.1)',
+                        border: '1px solid rgba(200, 155, 92, 0.3)',
+                        borderRadius: '4px',
+                        color: 'var(--color-accent)',
+                        fontSize: '0.8rem'
+                      }} title="El cliente aprueba o negocia la propuesta directamente desde el enlace del email enviado">
+                        ⏳ Pendiente de aprobación (exclusiva del cliente vía email)
+                      </div>
+                    )}
+
                     <button 
                       className="ln-btn-primary" 
-                      onClick={handleAcceptProposal}
-                      disabled={lead.propuesta?.aceptada}
-                      style={lead.propuesta?.aceptada ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
-                    >
-                      <IcoCal/> {lead.propuesta?.aceptada ? '✓ Propuesta Aceptada' : 'Aceptar Propuesta'}
-                    </button>
-                    <button 
-                      className="ln-btn-ghost" 
                       onClick={handleEnviarPropuestaChatbot}
-                      style={{ background: 'rgba(183, 210, 185, 0.15)', color: '#b7d2b9', border: '1px solid rgba(183, 210, 185, 0.3)' }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
                     >
-                      <IcoEmail/> Enviar por Email (Chatbot)
+                      <IcoEmail/> Enviar Propuesta al Correo (Chatbot)
                     </button>
-                    <button className="ln-btn-wa" onClick={() => show("Propuesta enviada por WhatsApp")}><IcoWA/> WhatsApp</button>
+
+                    <button 
+                      className="ln-btn-wa" 
+                      onClick={() => {
+                        const cleanTel = (lead.perfil?.telefono || '').replace(/\D/g, '');
+                        const tel = cleanTel.startsWith('51') ? cleanTel : `51${cleanTel}`;
+                        const msg = encodeURIComponent(`¡Hola ${fn}! Te saluda el equipo de Origen Spa & Bienestar. Hemos preparado una propuesta especial para ti: ${lead.propuesta?.nombre} a ${lead.propuesta?.precioEspecial}. Te enviamos también los detalles interactivos a tu correo.`);
+                        registrarEventoHistorial(lead.id, {
+                          tipo: 'WhatsApp',
+                          titulo: 'Propuesta compartida por WhatsApp',
+                          detalle: `Enlace y detalles de "${lead.propuesta?.nombre}" compartidos al +${tel}.`,
+                          autor: 'Staff Origen Spa'
+                        });
+                        window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
+                      }}
+                    >
+                      <IcoWA/> Compartir por WhatsApp
+                    </button>
                   </div>
-                  {toast && <div className="ln-toast" role="status">{toast}</div>}
                 </article>
               </div>
 
@@ -990,8 +1683,11 @@ export default function LeadsStaffPage() {
                   <p style={{fontSize:"0.72rem",color:"var(--color-ink-muted)",lineHeight:1.55}}>
                     Se recomienda enviar la propuesta por WhatsApp y hacer seguimiento en 24 horas.
                   </p>
-                  <button className="ln-btn-primary" style={{marginTop:"0.75rem",width:"100%",fontSize:"0.72rem",justifyContent:"center"}}
-                    onClick={() => show("Seguimiento automatizado activado")}>
+                  <button 
+                    className="ln-btn-primary" 
+                    style={{marginTop:"0.75rem",width:"100%",fontSize:"0.72rem",justifyContent:"center"}}
+                    onClick={handleAutomatizarSeguimiento}
+                  >
                     <IcoSend/> Automatizar
                   </button>
                 </article>
@@ -999,35 +1695,439 @@ export default function LeadsStaffPage() {
             </div>
           )}
 
-          {/* ── TAB: HISTORIAL ── */}
+          {/* ── TAB: HISTORIAL (TOTALMENTE FUNCIONAL) ── */}
           {tab === "Historial" && (
-            <article className="ln-card">
-              <h3 className="ln-card-title">Historial de interacciones</h3>
-              <p className="ln-muted" style={{marginTop:"0.75rem"}}>Sin interacciones registradas. Llamadas, mensajes y visitas aparecerán aquí.</p>
-            </article>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              {/* Formulario para registrar nueva interacción */}
+              <article className="ln-card">
+                <h3 className="ln-card-title" style={{ marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <IcoPlus/> Registrar Nueva Interacción con {fn}
+                </h3>
+                <form onSubmit={handleAgregarInteraccionManual} style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', width: '180px' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)' }}>Canal / Tipo:</label>
+                    <select 
+                      value={nuevoTipoInteraccion} 
+                      onChange={e => setNuevoTipoInteraccion(e.target.value)}
+                      className="ln-input"
+                    >
+                      <option value="Llamada">📞 Llamada telefónica</option>
+                      <option value="WhatsApp">💬 Mensaje WhatsApp</option>
+                      <option value="Email">✉️ Correo electrónico</option>
+                      <option value="Visita Spa">🏢 Visita al Spa</option>
+                      <option value="Nota">📝 Nota de contacto</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', flex: 1, minWidth: '260px' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)' }}>Detalle del contacto o acuerdo:</label>
+                    <input 
+                      type="text" 
+                      value={nuevoDetalleInteraccion} 
+                      onChange={e => setNuevoDetalleInteraccion(e.target.value)}
+                      placeholder="Ej: Se llamó a la clienta para coordinar turno de sábado por la tarde. Muy interesada..." 
+                      className="ln-input" 
+                    />
+                  </div>
+                  <button type="submit" className="ln-btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
+                    + Registrar en Historial
+                  </button>
+                </form>
+              </article>
+
+              {/* Lista y Filtros de Historial */}
+              <article className="ln-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.8rem' }}>
+                  <div>
+                    <h3 className="ln-card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <IcoCal/> Línea de Tiempo de Interacciones
+                    </h3>
+                    <p className="ln-muted" style={{ fontSize: '0.75rem' }}>Registro cronológico de todas las interacciones, propuestas y eventos del lead.</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    {["Todos", "Llamada", "WhatsApp", "Email", "Propuesta", "Registro"].map(f => (
+                      <button 
+                        key={f} 
+                        className={"ln-tag" + (filtroHistorial === f ? " active" : "")}
+                        onClick={() => setFiltroHistorial(f)}
+                        style={{
+                          background: filtroHistorial === f ? 'var(--color-accent)' : 'rgba(243,238,226,0.06)',
+                          color: filtroHistorial === f ? 'var(--color-ink-on-contrast)' : 'var(--color-ink-muted)',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '0.25rem 0.6rem',
+                          borderRadius: '12px',
+                          fontSize: '0.72rem'
+                        }}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Timeline visual */}
+                {(() => {
+                  const items = getLeadHistorial(lead).filter(it => {
+                    if (filtroHistorial === "Todos") return true;
+                    return it.tipo?.toLowerCase() === filtroHistorial.toLowerCase();
+                  });
+
+                  if (items.length === 0) {
+                    return (
+                      <p className="ln-muted" style={{ textAlign: 'center', padding: '2rem 0', fontSize: '0.82rem' }}>
+                        No hay interacciones registradas para este filtro.
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                      {items.map((it, idx) => {
+                        let icon = "💬";
+                        let badgeBg = "rgba(200, 155, 92, 0.15)";
+                        let badgeColor = "var(--color-accent)";
+
+                        if (it.tipo === "Llamada") { icon = "📞"; badgeBg = "rgba(183, 210, 185, 0.2)"; badgeColor = "#b7d2b9"; }
+                        else if (it.tipo === "WhatsApp") { icon = "💬"; badgeBg = "rgba(37, 211, 102, 0.2)"; badgeColor = "#25d366"; }
+                        else if (it.tipo === "Email") { icon = "✉️"; badgeBg = "rgba(183, 210, 185, 0.2)"; badgeColor = "#b7d2b9"; }
+                        else if (it.tipo === "Propuesta") { icon = "✨"; badgeBg = "rgba(200, 155, 92, 0.25)"; badgeColor = "var(--color-accent)"; }
+                        else if (it.tipo === "Registro" || it.tipo === "Enriquecimiento") { icon = "📋"; badgeBg = "rgba(217, 175, 160, 0.2)"; badgeColor = "var(--color-clay)"; }
+                        else if (it.tipo === "Visita Spa") { icon = "🏢"; badgeBg = "rgba(183, 210, 185, 0.2)"; badgeColor = "#b7d2b9"; }
+
+                        return (
+                          <div 
+                            key={it.id || idx}
+                            style={{
+                              display: 'flex',
+                              gap: '1rem',
+                              padding: '0.9rem 1.1rem',
+                              background: 'rgba(15, 30, 23, 0.4)',
+                              border: '1px solid var(--color-line)',
+                              borderRadius: '6px',
+                              alignItems: 'flex-start'
+                            }}
+                          >
+                            <div style={{ 
+                              width: '36px', 
+                              height: '36px', 
+                              borderRadius: '50%', 
+                              background: badgeBg, 
+                              color: badgeColor, 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              fontSize: '1rem',
+                              flexShrink: 0 
+                            }}>
+                              {icon}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                <strong style={{ fontSize: '0.85rem', color: 'var(--color-ink)' }}>{it.titulo}</strong>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                  <span style={{ fontSize: '0.68rem', color: 'var(--color-ink-muted)', background: 'rgba(243,238,226,0.06)', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                                    {it.autor || 'Staff'}
+                                  </span>
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)' }}>{it.fecha}</span>
+                                </div>
+                              </div>
+                              <p style={{ fontSize: '0.78rem', color: 'var(--color-ink-muted)', lineHeight: 1.5, margin: 0 }}>
+                                {it.detalle}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </article>
+            </div>
           )}
 
-          {/* ── TAB: NOTAS ── */}
+          {/* ── TAB: NOTAS (TOTALMENTE FUNCIONAL) ── */}
           {tab === "Notas" && (
-            <article className="ln-card">
-              <h3 className="ln-card-title">Notas del agente</h3>
-              <p className="ln-muted" style={{marginTop:"0.6rem",lineHeight:1.6}}>{lead.notas}</p>
-              <textarea className="ln-textarea" placeholder="Agregar nueva nota..."
-                value={note} onChange={e => setNote(e.target.value)}/>
-              <button className="ln-btn-ghost" style={{marginTop:"0.6rem"}} onClick={() => { show("Nota guardada"); setNote(""); }}>
-                Guardar nota
-              </button>
-            </article>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              {/* Formulario para agregar nueva nota */}
+              <article className="ln-card">
+                <h3 className="ln-card-title" style={{ marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <IcoMsg/> Agregar Nota de Asesor para {fn}
+                </h3>
+                <form onSubmit={handleAgregarNota} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)' }}>Categoría:</label>
+                    {["General", "Preferencia", "Objeción", "Salud / Piel", "Seguimiento"].map(cat => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setNuevaCategoriaNota(cat)}
+                        style={{
+                          background: nuevaCategoriaNota === cat ? 'var(--color-accent)' : 'rgba(243,238,226,0.06)',
+                          color: nuevaCategoriaNota === cat ? 'var(--color-ink-on-contrast)' : 'var(--color-ink-muted)',
+                          border: 'none',
+                          padding: '0.25rem 0.7rem',
+                          borderRadius: '12px',
+                          fontSize: '0.72rem',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea 
+                    className="ln-textarea" 
+                    placeholder="Escribe una observación, detalle relevante o preferencia detectada durante la conversación..."
+                    value={nuevaNotaTexto} 
+                    onChange={e => setNuevaNotaTexto(e.target.value)}
+                    style={{ minHeight: '80px', width: '100%', background: 'rgba(15,30,23,0.5)', border: '1px solid var(--color-line)', color: 'var(--color-ink)', padding: '0.6rem', borderRadius: '4px' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="submit" className="ln-btn-primary" style={{ padding: '0.5rem 1.2rem', fontSize: '0.8rem' }}>
+                      <IcoSave/> Guardar Nota
+                    </button>
+                  </div>
+                </form>
+              </article>
+
+              {/* Lista de Notas */}
+              <article className="ln-card">
+                <div style={{ marginBottom: '1rem' }}>
+                  <h3 className="ln-card-title">Cuaderno de Notas del Lead</h3>
+                  <p className="ln-muted" style={{ fontSize: '0.75rem' }}>Información clave compartida entre asesores para no olvidar ningún detalle.</p>
+                </div>
+
+                {(() => {
+                  const notas = getLeadNotas(lead);
+                  if (notas.length === 0) {
+                    return <p className="ln-muted" style={{ textAlign: 'center', padding: '2rem 0' }}>No hay notas guardadas para este lead.</p>;
+                  }
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                      {notas.map(n => (
+                        <div 
+                          key={n.id}
+                          style={{
+                            padding: '0.9rem 1.1rem',
+                            background: 'rgba(15, 30, 23, 0.45)',
+                            border: '1px solid var(--color-line)',
+                            borderRadius: '6px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                              <span style={{ 
+                                fontSize: '0.68rem', 
+                                background: 'rgba(200, 155, 92, 0.2)', 
+                                color: 'var(--color-accent)', 
+                                padding: '0.15rem 0.5rem', 
+                                borderRadius: '4px',
+                                fontWeight: '600'
+                              }}>
+                                {n.categoria || 'General'}
+                              </span>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)' }}>
+                                {n.autor} · {n.fecha}
+                              </span>
+                            </div>
+                            <button 
+                              onClick={() => handleEliminarNota(n.id)}
+                              style={{ background: 'none', border: 'none', color: 'var(--color-ink-muted)', cursor: 'pointer', opacity: 0.7 }}
+                              title="Eliminar nota"
+                            >
+                              <IcoTrash/>
+                            </button>
+                          </div>
+                          <p style={{ fontSize: '0.82rem', color: 'var(--color-ink)', lineHeight: 1.6, margin: 0 }}>
+                            {n.texto}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </article>
+            </div>
           )}
 
-          {/* ── TAB: ACTIVIDADES ── */}
+          {/* ── TAB: ACTIVIDADES (TOTALMENTE FUNCIONAL) ── */}
           {tab === "Actividades" && (
-            <article className="ln-card">
-              <h3 className="ln-card-title">Actividades programadas</h3>
-              <p className="ln-muted" style={{marginTop:"0.75rem"}}>
-                No hay actividades. Usa &ldquo;Automatizar seguimiento&rdquo; para crear una.
-              </p>
-            </article>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              {/* Formulario para programar nueva actividad */}
+              <article className="ln-card">
+                <h3 className="ln-card-title" style={{ marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <IcoCal/> Programar Nueva Tarea o Actividad
+                </h3>
+                <form onSubmit={handleAgregarActividad} style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', width: '160px' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)' }}>Tipo de tarea:</label>
+                    <select 
+                      value={nuevoTipoActividad} 
+                      onChange={e => setNuevoTipoActividad(e.target.value)}
+                      className="ln-input"
+                    >
+                      <option value="Llamada">📞 Llamada de seguimiento</option>
+                      <option value="WhatsApp">💬 Mensaje WhatsApp</option>
+                      <option value="Email">✉️ Enviar correo</option>
+                      <option value="Cita">🗓️ Cita en cabina</option>
+                      <option value="Tarea">📋 Tarea interna</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', flex: 2, minWidth: '220px' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)' }}>Descripción de la actividad:</label>
+                    <input 
+                      type="text" 
+                      value={nuevoTituloActividad} 
+                      onChange={e => setNuevoTituloActividad(e.target.value)}
+                      placeholder="Ej: Confirmar horario de tratamiento y consultar si viene con acompañante" 
+                      className="ln-input" 
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', width: '150px' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)' }}>Fecha / Plazo:</label>
+                    <input 
+                      type="text" 
+                      value={nuevaFechaActividad} 
+                      onChange={e => setNuevaFechaActividad(e.target.value)}
+                      placeholder="Ej: Mañana 11:00 AM" 
+                      className="ln-input" 
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', width: '110px' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)' }}>Prioridad:</label>
+                    <select 
+                      value={nuevaPrioridadActividad} 
+                      onChange={e => setNuevaPrioridadActividad(e.target.value)}
+                      className="ln-input"
+                    >
+                      <option value="Alta">🔴 Alta</option>
+                      <option value="Media">🟡 Media</option>
+                      <option value="Normal">🟢 Normal</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="ln-btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
+                    + Programar Tarea
+                  </button>
+                </form>
+              </article>
+
+              {/* Lista de Actividades y Filtros */}
+              <article className="ln-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.8rem' }}>
+                  <div>
+                    <h3 className="ln-card-title">Agenda de Tareas y Seguimiento</h3>
+                    <p className="ln-muted" style={{ fontSize: '0.75rem' }}>Control de compromisos y llamadas pendientes para asegurar la conversión.</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    {["Pendientes", "Completadas", "Todas"].map(f => (
+                      <button 
+                        key={f} 
+                        className={"ln-tag" + (filtroActividad === f ? " active" : "")}
+                        onClick={() => setFiltroActividad(f)}
+                        style={{
+                          background: filtroActividad === f ? 'var(--color-accent)' : 'rgba(243,238,226,0.06)',
+                          color: filtroActividad === f ? 'var(--color-ink-on-contrast)' : 'var(--color-ink-muted)',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '0.25rem 0.6rem',
+                          borderRadius: '12px',
+                          fontSize: '0.72rem'
+                        }}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {(() => {
+                  const acts = getLeadActividades(lead).filter(a => {
+                    if (filtroActividad === "Pendientes") return !a.completada;
+                    if (filtroActividad === "Completadas") return a.completada;
+                    return true;
+                  });
+
+                  if (acts.length === 0) {
+                    return (
+                      <p className="ln-muted" style={{ textAlign: 'center', padding: '2rem 0', fontSize: '0.82rem' }}>
+                        No hay actividades en estado &ldquo;{filtroActividad}&rdquo;.
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                      {acts.map(a => {
+                        const prioColor = a.prioridad === 'Alta' ? '#D9AFA0' : a.prioridad === 'Media' ? '#C89B5C' : '#b7d2b9';
+                        return (
+                          <div 
+                            key={a.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '0.75rem 1rem',
+                              background: a.completada ? 'rgba(15, 30, 23, 0.25)' : 'rgba(15, 30, 23, 0.5)',
+                              border: '1px solid var(--color-line)',
+                              borderRadius: '6px',
+                              gap: '0.8rem'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1 }}>
+                              <input 
+                                type="checkbox" 
+                                checked={a.completada} 
+                                onChange={() => handleToggleActividad(a.id)}
+                                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--color-accent)' }}
+                              />
+                              <div>
+                                <span style={{ 
+                                  fontSize: '0.82rem', 
+                                  color: a.completada ? 'var(--color-ink-muted)' : 'var(--color-ink)',
+                                  textDecoration: a.completada ? 'line-through' : 'none',
+                                  display: 'block'
+                                }}>
+                                  {a.titulo}
+                                </span>
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.2rem' }}>
+                                  <span style={{ fontSize: '0.68rem', color: 'var(--color-ink-muted)' }}>
+                                    📅 {a.fechaProgramada}
+                                  </span>
+                                  <span style={{ fontSize: '0.68rem', color: 'var(--color-ink-muted)' }}>
+                                    · Tipo: {a.tipo}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                              <span style={{ 
+                                fontSize: '0.68rem', 
+                                padding: '0.15rem 0.5rem', 
+                                borderRadius: '10px', 
+                                background: 'rgba(0,0,0,0.2)', 
+                                color: prioColor,
+                                border: `1px solid ${prioColor}` 
+                              }}>
+                                Prioridad {a.prioridad}
+                              </span>
+                              <button 
+                                onClick={() => handleEliminarActividad(a.id)}
+                                style={{ background: 'none', border: 'none', color: 'var(--color-ink-muted)', cursor: 'pointer', opacity: 0.6 }}
+                                title="Eliminar tarea"
+                              >
+                                <IcoTrash/>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </article>
+            </div>
           )}
 
         </main>
@@ -1038,6 +2138,26 @@ export default function LeadsStaffPage() {
         <span>Sistema de Gestión · Fase 2: LEADS</span>
       </footer>
 
+      {toast && (
+        <div 
+          className="ln-toast" 
+          role="status"
+          style={{
+            position: 'fixed',
+            right: '2rem',
+            bottom: '2rem',
+            left: 'auto',
+            zIndex: 9999,
+            minWidth: '280px',
+            maxWidth: '450px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.45)',
+            border: '1px solid var(--color-accent)'
+          }}
+        >
+          {toast}
+        </div>
+      )}
+
       <style dangerouslySetInnerHTML={{__html: `
         .ln-form-grid { display: flex; flex-direction: column; gap: 0.8rem; }
         .ln-form-group { display: grid; grid-template-columns: 140px 1fr; gap: 1rem; align-items: center; }
@@ -1045,6 +2165,7 @@ export default function LeadsStaffPage() {
         .ln-input { width: 100%; background: rgba(15,30,23,0.5); border: 1px solid var(--color-line); color: var(--color-ink); padding: 0.4rem 0.6rem; border-radius: 4px; font-family: var(--font-body); font-size: 0.8rem; outline: none; transition: border-color 0.2s; }
         .ln-input:focus { border-color: var(--color-accent); }
         .ln-input:read-only { color: var(--color-ink-muted); cursor: default; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       `}} />
     </div>
   );
