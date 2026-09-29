@@ -1,5 +1,5 @@
-import { supabase, requireSupabase, safeSupabaseOperation } from '../../../lib/supabaseClient'
-import { generarTokenEnriquecimiento, enviarFormularioEnriquecimiento } from '../../../lib/emailService'
+import { supabase, requireSupabase, safeSupabaseOperation, isSupabaseConfigured } from '../../../lib/supabaseClient'
+import { generarTokenEnriquecimiento, enviarFormularioEnriquecimiento, enviarRecordatorioEnriquecimiento } from '../../../lib/emailService'
 import { handleSupabaseError, createResponse } from '../../../lib/errorHandler'
 import { logger } from '../../../lib/logger'
 
@@ -8,6 +8,12 @@ import { logger } from '../../../lib/logger'
  */
 export async function generarFormularioEnriquecimiento(idContacto) {
   try {
+    if (!isSupabaseConfigured || !supabase) {
+      const token = generarTokenEnriquecimiento()
+      logger.info('enriquecimientoApi', 'Formulario de enriquecimiento simulado en modo demo', { idContacto, token })
+      return createResponse(true, { token, reutilizado: false })
+    }
+
     const client = requireSupabase()
 
     // Verificar si ya existe un formulario de enriquecimiento

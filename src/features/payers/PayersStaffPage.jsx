@@ -313,7 +313,7 @@ export default function PayersStaffPage() {
           setSource('demo')
         }
       } catch (error) {
-        console.error('[Payers] Error cargando clientes:', error)
+        console.warn('[Payers] Aviso cargando clientes:', error?.message || error)
         setSource('demo')
       } finally {
         setLoading(false)

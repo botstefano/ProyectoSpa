@@ -203,7 +203,7 @@ export default function LeadsStaffPage() {
         setLeads(finalLeads);
         if (finalLeads.length > 0) setSelId(finalLeads[0].id);
       } catch (err) {
-        console.error('[Leads] Sin conexion a BD, usando datos demo:', err);
+        console.warn('[Leads] Sin conexión a BD, usando datos demo:', err?.message || err);
         const DEMO = [
           { id:1, iniciales:'CR', nombre:'Camila Rodriguez', servicio:'Ritual de relajacion', score:87, temp:'Caliente', cita:'Mie 22 oct 10:00', interes:'Ritual de relajacion', frase:'Busco desestresarme tras largas semanas de trabajo.', tags:['#EstresSevero','#RitualRelax'], perfil:{nombre:'Camila Rodriguez',edad:'29 anios',telefono:'+51 912 345 678',email:'camila.r@gmail.com',distrito:'Miraflores'}, gustos:{tratamiento:'Ritual de relajacion',aroma:'Lavanda',musica:'Sonidos de naturaleza',horario:'Fines de semana',temperatura:'Calida',otras:'Sin ruido externo'}, estudiante:{especialidad:'Diseno grafico',nivel:'Egresada',universidad:'Toulouse Lautrec'}, laboral:{empresa:'Freelance',cargo:'Disenadora Senior',situacion:'Independiente'}, otros:{comoConocio:'Instagram Ads',citaAgendada:'Mie 22 oct 10:00',observaciones:'Muy motivada.',fechaRegistro:'15/09/2026',enriquecimientoCompletado:true,fechaEnriquecimiento:'16/09/2026'}, propuesta:{nombre:'Paquete Ritual Relax Premium',desc:'Sesion completa de relajacion profunda.',tags:['Recomendado','Bienestar'],duracion:'90 min',precioRegular:'S/ 180.00',precioEspecial:'S/ 144.00',ahorro:'S/ 36.00',descuento:'20%',incluye:'Aromaterapia, masaje relajante y te de hierbas.'}, porQue:['Estres alto.','Responde bien a la aromaterapia.','Alta fidelidad potencial.'], notas:'Lead caliente. DEMO MODE.' },
           { id:2, iniciales:'MG', nombre:'Maria Gonzales', servicio:'Masaje de piedras calientes', score:91, temp:'Caliente', cita:'Mar 21 oct 09:00', interes:'Masaje de piedras calientes', frase:'Soy clienta frecuente, quiero probar algo nuevo.', tags:['#ClienteFiel','#UpsellPremium'], perfil:{nombre:'Maria Gonzales',edad:'38 anios',telefono:'+51 967 890 123',email:'mariagonza@gmail.com',distrito:'Barranco'}, gustos:{tratamiento:'Masaje de piedras calientes',aroma:'Sandalo',musica:'Jazz suave',horario:'Martes manana',temperatura:'Muy calida',otras:'Sin restricciones'}, estudiante:{especialidad:'Psicologia',nivel:'Licenciada',universidad:'PUCP'}, laboral:{empresa:'Consultora',cargo:'Psicologa',situacion:'Independiente'}, otros:{comoConocio:'Clienta recurrente',citaAgendada:'Mar 21 oct 09:00',observaciones:'5 visitas anteriores.',fechaRegistro:'10/09/2026',enriquecimientoCompletado:true,fechaEnriquecimiento:'11/09/2026'}, propuesta:{nombre:'Experiencia Premium',desc:'Ritual con piedras volcanicas.',tags:['Premium','VIP'],duracion:'100 min',precioRegular:'S/ 240.00',precioEspecial:'S/ 192.00',ahorro:'S/ 48.00',descuento:'20%',incluye:'Masaje, aromaterapia y reflexologia.'}, porQue:['Score 91 — clienta mas valiosa.','5 visitas previas.','Candidata a VIP.'], notas:'Ofrecer membresia VIP. DEMO MODE.' }
@@ -224,7 +224,7 @@ export default function LeadsStaffPage() {
         const notifs = await obtenerNotificacionesPendientes('leads');
         setNotifications(notifs);
       } catch (error) {
-        console.error('[Leads] Error cargando notificaciones:', error);
+        console.warn('[Leads] Aviso cargando notificaciones:', error?.message || error);
       }
     }
     
@@ -238,7 +238,7 @@ export default function LeadsStaffPage() {
       await marcarNotificacionLeida(idNotificacion);
       setNotifications(prev => prev.filter(n => n.id_notificacion !== idNotificacion));
     } catch (error) {
-      console.error('[Leads] Error marcando notificación como leída:', error);
+      console.warn('[Leads] Aviso marcando notificación como leída:', error?.message || error);
     }
   }
 
@@ -393,11 +393,18 @@ export default function LeadsStaffPage() {
         return;
       }
 
-      // Preparar datos de la propuesta inicial
+      // Preparar datos de la propuesta inicial normalizando valores numéricos
+      const cleanNum = (val, fallback) => {
+        if (typeof val === 'number') return val;
+        if (!val) return fallback;
+        const n = parseFloat(String(val).replace(/[^\d.]/g, ''));
+        return isNaN(n) ? fallback : n;
+      };
+
       const datosPropuesta = {
-        servicio: lead.interes || 'Servicio general',
-        precio: lead.propuesta?.precioEspecial || 120,
-        precioRegular: lead.propuesta?.precioRegular || 150,
+        servicio: lead.interes || lead.propuesta?.nombre || 'Servicio general',
+        precio: cleanNum(lead.propuesta?.precioEspecial, 120),
+        precioRegular: cleanNum(lead.propuesta?.precioRegular, 150),
         duracion: lead.propuesta?.duracion || '60 min',
         descuento: lead.propuesta?.descuento || '0%',
         incluye: lead.propuesta?.incluye || 'Evaluación inicial, tratamiento y seguimiento'
@@ -945,7 +952,7 @@ export default function LeadsStaffPage() {
                     </div>
                   </div>
 
-                  <div className="ln-cta-row">
+                  <div className="ln-cta-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem' }}>
                     <button 
                       className="ln-btn-primary" 
                       onClick={handleAcceptProposal}
@@ -953,6 +960,13 @@ export default function LeadsStaffPage() {
                       style={lead.propuesta?.aceptada ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
                     >
                       <IcoCal/> {lead.propuesta?.aceptada ? '✓ Propuesta Aceptada' : 'Aceptar Propuesta'}
+                    </button>
+                    <button 
+                      className="ln-btn-ghost" 
+                      onClick={handleEnviarPropuestaChatbot}
+                      style={{ background: 'rgba(183, 210, 185, 0.15)', color: '#b7d2b9', border: '1px solid rgba(183, 210, 185, 0.3)' }}
+                    >
+                      <IcoEmail/> Enviar por Email (Chatbot)
                     </button>
                     <button className="ln-btn-wa" onClick={() => show("Propuesta enviada por WhatsApp")}><IcoWA/> WhatsApp</button>
                   </div>

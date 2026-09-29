@@ -1,19 +1,56 @@
 import { createClient } from '@supabase/supabase-js'
 import { logger } from './logger'
-import { checkSupabaseConfigured } from './errorHandler'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-const supabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+function isValidConfigValue(val) {
+  if (!val || typeof val !== 'string') return false
+  const trimmed = val.trim()
+  if (!trimmed) return false
+  if (
+    trimmed.startsWith('TU-') ||
+    trimmed.includes('TU-PROYECTO') ||
+    trimmed.includes('TU-ANON-KEY') ||
+    trimmed.includes('YOUR_') ||
+    trimmed.includes('your-') ||
+    trimmed.includes('example.com')
+  ) {
+    return false
+  }
+  return true
+}
+
+/**
+ * Detecta si un error es de red o fetch (sin conexión)
+ */
+export function isNetworkOrFetchError(error) {
+  if (!error) return false
+  const msg = (
+    String(error?.name || '') + ' ' +
+    String(error?.message || '') + ' ' + 
+    String(error?.details || '') + ' ' + 
+    String(error?.originalError?.message || '') + ' ' +
+    String(error?.originalError?.details || '')
+  ).toLowerCase()
+
+  return (
+    error?.name === 'TypeError' ||
+    msg.includes('failed to fetch') ||
+    msg.includes('network') ||
+    msg.includes('load failed') ||
+    msg.includes('connection refused')
+  )
+}
+
+const supabaseConfigured = Boolean(
+  isValidConfigValue(supabaseUrl) &&
+  isValidConfigValue(supabaseAnonKey) &&
+  (supabaseUrl.startsWith('https://') || supabaseUrl.startsWith('http://localhost'))
+)
 
 if (!supabaseConfigured) {
-  logger.warn('supabaseClient', 'Supabase no está configurado. La aplicación funcionará en modo demo.')
-  // eslint-disable-next-line no-console
-  console.warn(
-    '[Supabase] Sin credenciales: la aplicación puede ejecutarse en modo demo. ' +
-    'Configura VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY para habilitar persistencia.'
-  )
+  logger.warn('supabaseClient', 'Supabase no está configurado con credenciales activas. La aplicación opera en modo demo.')
 }
 
 // En modo demo evitamos crear un cliente inválido. Los módulos que necesitan
@@ -27,7 +64,6 @@ export const isSupabaseConfigured = supabaseConfigured
  */
 export function requireSupabase() {
   if (!supabase || !isSupabaseConfigured) {
-    logger.error('supabaseClient', 'Intento de usar Supabase sin configuración')
     throw new Error('Supabase no está configurado. Configure VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY')
   }
   return supabase
@@ -35,15 +71,27 @@ export function requireSupabase() {
 
 /**
  * Wrapper seguro para operaciones de Supabase
- * Maneja automáticamente el caso cuando Supabase no está configurado
+ * Maneja automáticamente el caso cuando Supabase no está configurado o falla la red
  */
-export function safeSupabaseOperation(operation, fallbackValue = null) {
+export async function safeSupabaseOperation(operation, fallbackValue = null) {
   if (!supabase || !isSupabaseConfigured) {
-    logger.warn('supabaseClient', 'Operación de Supabase cancelada: no configurado')
-    return Promise.resolve(fallbackValue)
+    return fallbackValue
   }
   
-  return operation(supabase)
+  try {
+    return await operation(supabase)
+  } catch (error) {
+    if (isNetworkOrFetchError(error)) {
+      logger.warn('supabaseClient', 'Sin conexión con Supabase (red no disponible). Operando en modo local.', {
+        error: error.message || error
+      })
+    } else {
+      logger.warn('supabaseClient', 'Aviso en operación de Supabase, retornando valor por defecto:', {
+        error: error.message || error
+      })
+    }
+    return fallbackValue
+  }
 }
 
 /**
@@ -55,17 +103,25 @@ export async function checkSupabaseConnection() {
   }
   
   try {
-    const { data, error } = await supabase.from('estado_contacto').select('count').single()
+    const { data: _data, error } = await supabase.from('estado_contacto').select('count').single()
     
     if (error) {
-      logger.error('supabaseClient', 'Error verificando conexión con Supabase', { error })
+      if (isNetworkOrFetchError(error)) {
+        logger.warn('supabaseClient', 'Supabase no alcanzable (sin conexión), modo demo activo')
+        return { connected: false, error: 'Sin conexión a Supabase' }
+      }
+      logger.warn('supabaseClient', 'Aviso verificando conexión con Supabase', { error })
       return { connected: false, error: error.message }
     }
     
     logger.info('supabaseClient', 'Conexión con Supabase verificada exitosamente')
     return { connected: true }
   } catch (error) {
-    logger.error('supabaseClient', 'Error inesperado verificando conexión', { error })
+    if (isNetworkOrFetchError(error)) {
+      logger.warn('supabaseClient', 'Sin conexión con Supabase, operando en modo demo')
+    } else {
+      logger.warn('supabaseClient', 'Error verificando conexión', { error: error.message })
+    }
     return { connected: false, error: error.message }
   }
 }

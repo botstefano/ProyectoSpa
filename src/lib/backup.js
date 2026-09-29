@@ -11,22 +11,12 @@ const BACKUP_VERSION = '1.0'
 
 /**
  * Estructura de backup
+ * @typedef {Object} BackupStructure
+ * @property {string} version
+ * @property {string} fecha
+ * @property {Object} datos
+ * @property {Object} metadata
  */
-interface BackupStructure {
-  version: string
-  fecha: string
-  datos: {
-    contactos?: any[]
-    leads_detalle?: any[]
-    pagos_detalle?: any[]
-    atenciones_detalle?: any[]
-    notificaciones?: any[]
-  }
-  metadata: {
-    total_registros: number
-    tablas_incluidas: string[]
-  }
-}
 
 /**
  * Crea un backup de los datos críticos
@@ -126,7 +116,7 @@ export async function restaurarBackup(backupData = null) {
           .neq('id_contacto', 0) // Truco para eliminar todos (puede variar según la tabla)
         
         if (deleteError) {
-          logger.warn('backup', `Error limpiando tabla ${tabla}`, { error })
+          logger.warn('backup', `Error limpiando tabla ${tabla}`, { error: deleteError })
         }
         
         // Insertar datos del backup

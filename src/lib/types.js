@@ -16,7 +16,7 @@ export const TypeValidators = {
   object: (value) => typeof value === 'object' && value !== null && !Array.isArray(value),
   date: (value) => value instanceof Date || !isNaN(Date.parse(value)),
   email: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-  phone: (value) => /^(\+51)?9\d{8}$/.test(value.replace(/[\s\-\(\)]/g, '')),
+  phone: (value) => /^(\+51)?9\d{8}$/.test(value.replace(/[\s\-()]/g, '')),
   url: (value) => {
     try {
       new URL(value)

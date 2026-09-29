@@ -23,8 +23,16 @@ export default function PropuestaChatbotPage() {
   const [inputMessage, setInputMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [confirmError, setConfirmError] = useState(null)
   
   const messagesEndRef = useRef(null)
+
+  const quickPrompts = [
+    '¿Tienen algún descuento disponible?',
+    '¿Qué incluye exactamente el tratamiento?',
+    '¿Qué horarios y días tienen disponibles?',
+    '¡Me parece perfecto, acepto la propuesta!'
+  ]
 
   useEffect(() => {
     async function cargarPropuesta() {
@@ -131,8 +139,14 @@ export default function PropuestaChatbotPage() {
     }
   }
 
+  async function handleQuickSend(promptText) {
+    if (sending) return
+    setInputMessage(promptText)
+  }
+
   async function handleConfirmarPropuesta() {
     setConfirming(true)
+    setConfirmError(null)
     try {
       const response = await confirmarPropuestaFinal(
         propuesta.id_propuesta,
@@ -148,7 +162,7 @@ export default function PropuestaChatbotPage() {
       }
     } catch (error) {
       logger.error('propuestaChatbot', 'Error confirmando propuesta', { error })
-      alert('Error al confirmar propuesta: ' + error.message)
+      setConfirmError(error.message || 'Error al confirmar la propuesta. Por favor intenta de nuevo.')
     } finally {
       setConfirming(false)
     }
@@ -297,10 +311,10 @@ export default function PropuestaChatbotPage() {
               </p>
             </div>
 
-            {/* Layout de dos paneles */}
+            {/* Layout de dos paneles adaptable a móviles y escritorio */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: '1fr 1fr', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', 
               gap: '2rem',
               marginBottom: '2rem'
             }}>
@@ -358,7 +372,9 @@ export default function PropuestaChatbotPage() {
                         fontWeight: '700',
                         color: 'var(--color-accent)'
                       }}>
-                        S/ {propuestaActual.precio || '0'}
+                        S/ {typeof propuestaActual.precio === 'number' 
+                          ? propuestaActual.precio.toFixed(2) 
+                          : String(propuestaActual.precio || '0').replace(/^[^\d.]*/, '')}
                       </div>
                       {propuestaActual.descuento && (
                         <div style={{ 
@@ -446,28 +462,33 @@ export default function PropuestaChatbotPage() {
                 border: '1px solid var(--color-line)',
                 display: 'flex',
                 flexDirection: 'column',
-                height: '600px'
+                minHeight: '620px'
               }}>
-                <h3 style={{ 
-                  fontFamily: 'var(--font-display)',
-                  fontSize: '1.3rem',
-                  marginBottom: '1rem',
-                  color: 'var(--color-accent)'
-                }}>
-                  Asistente Virtual
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                  <h3 style={{ 
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '1.3rem',
+                    color: 'var(--color-accent)'
+                  }}>
+                    Asistente Virtual
+                  </h3>
+                  <span style={{ fontSize: '0.75rem', color: '#b7d2b9', background: 'rgba(183, 210, 185, 0.15)', padding: '0.2rem 0.6rem', borderRadius: '12px' }}>
+                    ● En línea
+                  </span>
+                </div>
 
                 {/* Área de mensajes */}
                 <div style={{ 
                   flex: 1, 
                   overflowY: 'auto', 
-                  marginBottom: '1rem',
+                  marginBottom: '0.8rem',
                   padding: '1rem',
                   background: 'rgba(15, 30, 23, 0.3)',
                   borderRadius: '6px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '0.8rem'
+                  gap: '0.8rem',
+                  maxHeight: '380px'
                 }}>
                   {messages.map((msg, index) => (
                     <div key={index} style={{
@@ -475,7 +496,7 @@ export default function PropuestaChatbotPage() {
                       justifyContent: msg.rol === 'user' ? 'flex-end' : 'flex-start'
                     }}>
                       <div style={{
-                        maxWidth: '80%',
+                        maxWidth: '85%',
                         padding: '0.8rem 1rem',
                         borderRadius: '8px',
                         background: msg.rol === 'user' 
@@ -492,6 +513,30 @@ export default function PropuestaChatbotPage() {
                     </div>
                   ))}
                   <div ref={messagesEndRef} />
+                </div>
+
+                {/* Preguntas rápidas sugeridas */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.8rem' }}>
+                  {quickPrompts.map((p, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handleQuickSend(p)}
+                      disabled={sending}
+                      style={{
+                        background: 'rgba(243, 238, 226, 0.06)',
+                        border: '1px solid var(--color-line)',
+                        color: 'var(--color-ink-muted)',
+                        fontSize: '0.75rem',
+                        padding: '0.3rem 0.6rem',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                    >
+                      {p}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Input de mensaje */}
@@ -529,6 +574,20 @@ export default function PropuestaChatbotPage() {
                     {sending ? '...' : 'Enviar'}
                   </button>
                 </form>
+
+                {confirmError && (
+                  <div style={{
+                    marginTop: '0.8rem',
+                    padding: '0.6rem 0.8rem',
+                    background: 'rgba(217, 175, 160, 0.15)',
+                    border: '1px solid var(--color-clay)',
+                    borderRadius: '4px',
+                    color: 'var(--color-clay)',
+                    fontSize: '0.82rem'
+                  }}>
+                    ⚠️ {confirmError}
+                  </div>
+                )}
 
                 {/* Botón de confirmación - siempre visible */}
                 <button

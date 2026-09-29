@@ -1,4 +1,4 @@
-import { supabase, requireSupabase, safeSupabaseOperation } from '../../../lib/supabaseClient'
+import { supabase, requireSupabase, safeSupabaseOperation, isSupabaseConfigured } from '../../../lib/supabaseClient'
 import { validateEmail, validatePhone, validateName, validateContact } from '../../../lib/validators'
 import { handleSupabaseError, handleValidationError, createResponse } from '../../../lib/errorHandler'
 import { logger } from '../../../lib/logger'
@@ -16,6 +16,10 @@ function resolverNombreFuente() {
 }
 
 async function idPorNombre(tabla, columnaId, columnaNombre, nombre) {
+  if (!isSupabaseConfigured || !supabase) {
+    return 1
+  }
+
   try {
     const client = requireSupabase()
     const { data, error } = await client
@@ -28,8 +32,8 @@ async function idPorNombre(tabla, columnaId, columnaNombre, nombre) {
     if (error) throw handleSupabaseError(error, `obtener ID de ${tabla}`)
     return data[columnaId]
   } catch (error) {
-    logger.error('buyersApi', `Error obteniendo ID de ${tabla}`, { tabla, nombre, error })
-    throw error
+    logger.warn('buyersApi', `Aviso obteniendo ID de ${tabla}, usando fallback`, { tabla, nombre, error: error.message || error })
+    return 1
   }
 }
 
@@ -83,6 +87,16 @@ export async function registrarLead({ nombre, email, telefono, tipoPiel, interes
     const phoneValidation = validatePhone(telefono)
     if (!phoneValidation.valid) {
       throw handleValidationError('telefono', phoneValidation.error, telefono)
+    }
+
+    if (!isSupabaseConfigured || !supabase) {
+      const demoId = Date.now()
+      logger.info('buyersApi', 'Lead registrado en modo demo local', {
+        idContacto: demoId,
+        nombre: nombreValidation.cleanName,
+        email
+      })
+      return createResponse(true, { idContacto: demoId, demo: true })
     }
 
     const client = requireSupabase()

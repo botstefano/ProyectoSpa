@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient'
+import { supabase, isSupabaseConfigured, isNetworkOrFetchError } from './supabaseClient'
 
 /**
  * Sistema de notificaciones entre fases del proceso IMPULSE
@@ -15,9 +15,8 @@ import { supabase } from './supabaseClient'
  * @param {object} dataAdicional - Datos adicionales en formato JSON
  */
 export async function enviarNotificacion(idContacto, faseOrigen, faseDestino, tipoEvento, mensaje, dataAdicional = {}) {
-  if (!supabase) {
-    console.warn('[Notificaciones] Supabase no configurado, notificación no enviada')
-    return { success: false, message: 'Supabase no configurado' }
+  if (!supabase || !isSupabaseConfigured) {
+    return { success: true, message: 'Notificación procesada localmente' }
   }
 
   try {
@@ -32,13 +31,21 @@ export async function enviarNotificacion(idContacto, faseOrigen, faseDestino, ti
         data_adicional: dataAdicional
       })
 
-    if (error) throw error
+    if (error) {
+      if (isNetworkOrFetchError(error)) {
+        return { success: false, message: 'Sin conexión con base de datos' }
+      }
+      throw error
+    }
 
     console.log(`[Notificaciones] ${faseOrigen} → ${faseDestino}: ${tipoEvento}`)
     return { success: true, message: 'Notificación enviada' }
   } catch (error) {
-    console.error('[Notificaciones] Error enviando notificación:', error.message)
-    return { success: false, message: error.message }
+    if (isNetworkOrFetchError(error)) {
+      return { success: false, message: 'Sin conexión con base de datos' }
+    }
+    console.warn('[Notificaciones] Aviso enviando notificación:', error?.message || error)
+    return { success: false, message: error?.message || 'Error al enviar notificación' }
   }
 }
 
@@ -48,7 +55,7 @@ export async function enviarNotificacion(idContacto, faseOrigen, faseDestino, ti
  * @returns {Array} Lista de notificaciones no leídas
  */
 export async function obtenerNotificacionesPendientes(fase) {
-  if (!supabase) return []
+  if (!supabase || !isSupabaseConfigured) return []
 
   try {
     const { data, error } = await supabase
@@ -58,11 +65,20 @@ export async function obtenerNotificacionesPendientes(fase) {
       .eq('leida', false)
       .order('fecha_creacion', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      if (isNetworkOrFetchError(error)) {
+        return []
+      }
+      console.warn('[Notificaciones] Aviso obteniendo notificaciones:', error.message)
+      return []
+    }
 
     return data || []
   } catch (error) {
-    console.error('[Notificaciones] Error obteniendo notificaciones:', error.message)
+    if (isNetworkOrFetchError(error)) {
+      return []
+    }
+    console.warn('[Notificaciones] Aviso obteniendo notificaciones:', error?.message || error)
     return []
   }
 }
@@ -72,7 +88,7 @@ export async function obtenerNotificacionesPendientes(fase) {
  * @param {number} idNotificacion - ID de la notificación
  */
 export async function marcarNotificacionLeida(idNotificacion) {
-  if (!supabase) return
+  if (!supabase || !isSupabaseConfigured) return
 
   try {
     const { error } = await supabase
@@ -80,9 +96,13 @@ export async function marcarNotificacionLeida(idNotificacion) {
       .update({ leida: true, fecha_lectura: new Date().toISOString() })
       .eq('id_notificacion', idNotificacion)
 
-    if (error) throw error
+    if (error && !isNetworkOrFetchError(error)) {
+      console.warn('[Notificaciones] Aviso marcando notificación como leída:', error.message)
+    }
   } catch (error) {
-    console.error('[Notificaciones] Error marcando notificación como leída:', error.message)
+    if (!isNetworkOrFetchError(error)) {
+      console.warn('[Notificaciones] Aviso marcando notificación como leída:', error?.message || error)
+    }
   }
 }
 

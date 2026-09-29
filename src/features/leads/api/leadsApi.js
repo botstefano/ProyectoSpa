@@ -1,4 +1,4 @@
-import { supabase, requireSupabase, safeSupabaseOperation } from '../../../lib/supabaseClient'
+import { supabase, requireSupabase, safeSupabaseOperation, isSupabaseConfigured, isNetworkOrFetchError } from '../../../lib/supabaseClient'
 import { notificarLeadCalificado, notificarPropuestaAceptada } from '../../../lib/notificaciones'
 import { validateLeadScore, validateEmail, validatePhone, validateName } from '../../../lib/validators'
 import { handleSupabaseError, handleValidationError, createResponse } from '../../../lib/errorHandler'
@@ -6,6 +6,10 @@ import { logger } from '../../../lib/logger'
 import { registrarTransicionFase, registrarAuditoria } from '../../../lib/auditoria'
 
 export async function obtenerLeads() {
+  if (!supabase || !isSupabaseConfigured) {
+    return []
+  }
+
   return safeSupabaseOperation(async (client) => {
     try {
       const { data, error } = await client
@@ -36,9 +40,15 @@ export async function obtenerLeads() {
         `)
         .order('fecha_registro', { ascending: false })
 
-      if (error) throw handleSupabaseError(error, 'obtener leads')
+      if (error) {
+        if (isNetworkOrFetchError(error)) {
+          logger.warn('leadsApi', 'Sin conexión a Supabase para obtener leads. Activando datos de respaldo.')
+          return []
+        }
+        throw handleSupabaseError(error, 'obtener leads')
+      }
 
-      const filtrados = data.filter(c => {
+      const filtrados = (data || []).filter(c => {
         const estadoObj = Array.isArray(c.estado_contacto) ? c.estado_contacto[0] : c.estado_contacto;
         const estado = estadoObj?.nombre_estado;
         return estado === 'buyer' || estado === 'lead' || estado === 'customer' || estado === 'payer';
@@ -47,8 +57,12 @@ export async function obtenerLeads() {
       logger.info('leadsApi', `Leads obtenidos: ${filtrados.length}`)
       return filtrados
     } catch (error) {
+      if (isNetworkOrFetchError(error)) {
+        logger.warn('leadsApi', 'Sin conexión con Supabase para obtener leads, usando datos de respaldo')
+        return []
+      }
       logger.error('leadsApi', 'Error obteniendo leads', { error })
-      throw error
+      return []
     }
   }, [])
 }

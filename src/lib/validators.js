@@ -35,7 +35,7 @@ export function validatePhone(phone) {
   }
   
   // Eliminar espacios y caracteres especiales
-  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '')
+  const cleanPhone = phone.replace(/[\s\-()]/g, '')
   
   // Validar formato peruano: +51 9XX XXX XXX o 9XX XXX XXX
   const phoneRegex = /^(\+51)?9\d{8}$/

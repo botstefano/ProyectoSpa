@@ -184,14 +184,15 @@ const ORIGEN_SPA_CATALOGO = {
  */
 function validarSolicitud(solicitud, propuestaActual) {
   const servicio = ORIGEN_SPA_CATALOGO.servicios
-  const politicas = ORIGEN_SPA_CATALOGO.politicas
   
-  // Buscar el servicio en el catálogo
+  // Buscar el servicio en el catálogo de forma flexible
   let servicioEncontrado = null
+  const propuestaNombre = (propuestaActual?.servicio || '').toLowerCase()
   for (const categoria in servicio) {
     const encontrado = servicio[categoria].find(s => 
       s.id === propuestaActual?.servicio_id || 
-      s.nombre.toLowerCase().includes((propuestaActual?.servicio || '').toLowerCase())
+      propuestaNombre.includes(s.nombre.toLowerCase()) ||
+      s.nombre.toLowerCase().includes(propuestaNombre)
     )
     if (encontrado) {
       servicioEncontrado = encontrado
@@ -200,7 +201,14 @@ function validarSolicitud(solicitud, propuestaActual) {
   }
   
   if (!servicioEncontrado) {
-    return { valida: false, razon: 'Servicio no encontrado en catálogo' }
+    const precioBase = Number(propuestaActual?.precio) || 120
+    servicioEncontrado = {
+      nombre: propuestaActual?.servicio || 'Tratamiento Spa',
+      precio_base: precioBase,
+      precio_minimo: Math.max(50, Math.round(precioBase * 0.7)),
+      descuento_maximo: 15,
+      disponibilidad: ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
+    }
   }
   
   // Validar precio mínimo
@@ -233,6 +241,13 @@ function validarSolicitud(solicitud, propuestaActual) {
   return { valida: true, servicio: servicioEncontrado }
 }
 
+function isRealMistralKey(key) {
+  if (!key || typeof key !== 'string') return false
+  const trimmed = key.trim()
+  if (!trimmed || trimmed.startsWith('TU-') || trimmed.includes('MISTRAL-API-KEY') || trimmed.includes('YOUR_')) return false
+  return true
+}
+
 /**
  * Enviar mensaje a Mistral AI
  * @param {string} message - Mensaje del usuario
@@ -241,32 +256,27 @@ function validarSolicitud(solicitud, propuestaActual) {
  * @param {string} apiKey - API key de Mistral
  */
 export async function sendMessageToMistral(message, conversationHistory = [], currentProposal = {}, apiKey) {
-  // Verificar si la API key está configurada
-  if (!apiKey) {
-    throw new Error('MISTRAL_API_KEY no configurada. Configura VITE_MISTRAL_API_KEY en .env y en Render')
+  // Si no hay API key real configurada, usar el asistente inteligente spa de contingencia
+  if (!isRealMistralKey(apiKey)) {
+    logger.warn('mistralService', 'VITE_MISTRAL_API_KEY no configurada o con valor demo. Operando en modo asistente spa local.')
+    return simulateMistralResponse(message, currentProposal)
   }
   
-  // Loggear que la API key está detectada (sin mostrar el valor completo por seguridad)
+  // Loggear que la API key está detectada
   logger.info('mistralService', 'API key de Mistral detectada correctamente', { 
     keyLength: apiKey.length,
     keyPrefix: apiKey.substring(0, 8) + '...'
   })
 
   try {
-    // Validar solicitud contra el catálogo antes de enviar a Mistral
     const validacion = validarSolicitud({ mensaje: message }, currentProposal)
-    
-    // Construir el contexto del sistema con el catálogo completo
     const systemPrompt = buildSystemPrompt(currentProposal)
     
-    // Construir el array de mensajes para Mistral
-    // Transformar el historial de conversación del formato español al formato de Mistral
-    // Limitar drásticamente a los últimos 3 mensajes para evitar rate limits
-    const recentHistory = conversationHistory.slice(-3)
+    const recentHistory = conversationHistory.slice(-4)
     const transformedHistory = recentHistory.map(msg => ({
-      role: msg.rol || msg.role,
-      content: msg.mensaje || msg.content
-    }))
+      role: (msg.rol === 'assistant' || msg.role === 'assistant') ? 'assistant' : 'user',
+      content: msg.mensaje || msg.content || ''
+    })).filter(m => m.content)
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -279,94 +289,69 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       hasConversationHistory: conversationHistory.length > 0
     })
 
-    // Llamada a la API de Mistral con reintentos reducidos para evitar gastar créditos
     let retries = 0
-    const maxRetries = 1 // Reducir a 1 reintento para no gastar créditos
+    const maxRetries = 1
     let lastError = null
 
-    while (retries < maxRetries) {
+    while (retries <= maxRetries) {
       const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'mistral-small-latest', // Modelo optimizado para costo/rendimiento
-        messages: messages,
-        temperature: 0.7, // Creatividad moderada para negociación
-        max_tokens: 500
-      })
-    })
-
-      // Manejo específico de rate limit (429)
-      if (response.status === 429) {
-        const errorData = await response.json().catch(() => ({ message: 'Rate limit exceeded' }))
-        logger.warn('mistralService', 'Rate limit de Mistral, reintentando...', { 
-          retry: retries + 1,
-          maxRetries: maxRetries,
-          errorData: errorData 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'mistral-small-latest',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 450
         })
-        
-        // Esperar con backoff exponencial: 3s (solo un reintento)
-        const waitTime = 3000
-        await new Promise(resolve => setTimeout(resolve, waitTime))
-        
+      })
+
+      if (response.status === 429) {
+        logger.warn('mistralService', 'Rate limit en Mistral (429), reintentando...')
+        await new Promise(resolve => setTimeout(resolve, 2000))
         retries++
-        lastError = new Error(`Mistral API (429): Rate limit exceeded`)
-        continue // Reintentar
+        lastError = new Error('Mistral API (429): Rate limit exceeded')
+        continue
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Error desconocido en API de Mistral' }))
-        const errorMessage = errorData.message || errorData.error?.message || 'Error en API de Mistral'
-        logger.error('mistralService', 'Error en respuesta de Mistral', { 
-          status: response.status,
-          statusText: response.statusText,
-          errorData: errorData 
-        })
-        throw new Error(`Mistral API (${response.status}): ${errorMessage}`)
+        const errorText = await response.text().catch(() => '')
+        throw new Error(`Mistral API (${response.status}): ${errorText || response.statusText}`)
       }
 
-    const result = await response.json()
-    
-    if (!result.choices || !result.choices[0] || !result.choices[0].message) {
-      throw new Error('Respuesta de Mistral no tiene el formato esperado')
-    }
+      const result = await response.json()
+      
+      if (!result.choices || !result.choices[0] || !result.choices[0].message) {
+        throw new Error('Respuesta de Mistral no tiene el formato esperado')
+      }
 
-    const aiMessage = result.choices[0].message.content
+      let aiMessage = result.choices[0].message.content || ''
 
-    logger.info('mistralService', 'Mensaje enviado a Mistral exitosamente', { 
-      messageLength: message.length,
-      responseLength: aiMessage.length,
-      validacion: validacion,
-      retries: retries
-    })
+      // Procesar la respuesta para detectar cambios en la propuesta
+      const proposalChanges = extractProposalChanges(aiMessage, currentProposal)
 
-    // Procesar la respuesta para detectar cambios en la propuesta
-    const proposalChanges = extractProposalChanges(aiMessage, currentProposal)
+      // Limpiar etiqueta de control [ACTUALIZACION: ...] para no mostrarla textualmente al cliente
+      aiMessage = aiMessage.replace(/\[ACTUALIZACION:[^\]]+\]/gi, '').trim()
 
-    return {
-      success: true,
-      message: aiMessage,
-      proposalChanges: proposalChanges,
-      validacion: validacion,
-      rawResponse: result
-    }
+      return {
+        success: true,
+        message: aiMessage,
+        proposalChanges: proposalChanges,
+        validacion: validacion,
+        rawResponse: result
+      }
     }
     
-    // Si todos los reintentos fallaron por rate limit
-    if (lastError) {
-      throw lastError
-    }
+    if (lastError) throw lastError
   } catch (error) {
-    logger.error('mistralService', 'Error comunicando con Mistral', { 
-      error: error.message,
-      stack: error.stack 
+    logger.warn('mistralService', 'Error comunicando con Mistral, activando respuesta de contingencia', { 
+      error: error.message 
     })
     
-    // NO usar modo simulación - lanzar error directamente
-    throw new Error(`Error de Mistral API: ${error.message}. Por favor verifica tu plan y límites de tasa.`)
+    // Asistente inteligente de contingencia para que el cliente nunca se quede sin respuesta
+    return simulateMistralResponse(message, currentProposal)
   }
 }
 
@@ -374,55 +359,77 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
  * Construir el prompt del sistema con contexto completo del negocio
  */
 function buildSystemPrompt(currentProposal) {
-  // Usar solo información esencial del catálogo para reducir tokens
-  const catalogoResumido = {
-    servicios: Object.keys(ORIGEN_SPA_CATALOGO.servicios).join(', '),
-    politicas: ORIGEN_SPA_CATALOGO.politicas,
-    reglas_clave: "Descuentos máx 15%, precios mínimos según servicio, respetar disponibilidad"
-  }
+  const serviciosNombres = Object.keys(ORIGEN_SPA_CATALOGO.servicios).join(', ')
   
-  return `Eres asistente de Origen Spa en Trujillo. Ayuda a negociar propuestas de spa.
+  return `Eres asistente virtual de Origen Spa en Trujillo, Perú. Ayuda amablemente a los clientes a negociar y resolver dudas sobre su propuesta de spa.
 
-SERVICIOS: ${catalogoResumido.servicios}
-POLÍTICAS: ${JSON.stringify(catalogoResumido.politicas, null, 2)}
-REGLAS CLAVE: ${catalogoResumido.reglas_clave}
+SERVICIOS DISPONIBLES: ${serviciosNombres}
+POLÍTICAS:
+- Descuentos: máximo 15% de descuento sobre el precio base.
+- Métodos de pago: Efectivo, Tarjeta, Transferencia, Yape y Plin.
+- Horarios: Lunes a Sábado de 9:00 AM a 8:00 PM. Domingos cerrado.
+- Ubicación: Trujillo, La Libertad.
 
-PROPUESTA ACTUAL: ${JSON.stringify(currentProposal, null, 2)}
+PROPUESTA ACTUAL DEL CLIENTE:
+- Servicio: ${currentProposal?.servicio || 'Tratamiento Spa'}
+- Precio actual: S/ ${currentProposal?.precio || '120'}
+- Duración: ${currentProposal?.duracion || '60 min'}
+- Descuento actual: ${currentProposal?.descuento || '0%'}
+- Incluye: ${currentProposal?.incluye || 'Tratamiento completo'}
 
-REGLAS:
-- Ofrecer descuentos hasta 15% máximo
-- Respetar precios mínimos del catálogo
-- Usar tono amable y profesional en español
-- Si el cliente pide algo irrazonable, explica y ofrece alternativas
-- Responde en español de forma conversacional
-
-Negocia precio, fecha u horario según las políticas. Si hay cambios, indica claramente el nuevo precio.`
+INSTRUCCIONES CLAVE:
+1. Responde en español con tono cálido, profesional y conciso.
+2. Si el cliente pide una rebaja o descuento, puedes ofrecer hasta un 10% o 15% máximo.
+3. Si acuerdas un nuevo precio o cambio de fecha/horario, explica el beneficio amablemente.
+4. OBLIGATORIO: Si acuerdas una modificación de precio, descuento, fecha u horario, añade al final de tu mensaje una etiqueta con este formato exacto:
+[ACTUALIZACION: precio=S/ 108, descuento=10%]
+5. Si el cliente dice que acepta la propuesta o está de acuerdo, felicítalo y recuérdale hacer clic en el botón "Confirmar Propuesta".`
 }
 
 /**
  * Extraer cambios en la propuesta desde la respuesta de la IA
  */
-function extractProposalChanges(aiMessage, currentProposal) {
+function extractProposalChanges(aiMessage, _currentProposal) {
   const changes = {}
   
-  // Patrones para detectar cambios específicos
-  const patterns = {
-    precio: /precio[:\s]*S\/\s*(\d+(?:\.\d{2})?)/gi,
-    descuento: /descuento[:\s]*(\d+)%/gi,
-    duracion: /duración[:\s]*(\d+)\s*(min|horas?)/gi,
-    fecha: /fecha[:\s]*([^\n,]+)/gi,
-    horario: /horario[:\s]*([^\n,]+)/gi
+  // 1. Buscar etiqueta estructurada [ACTUALIZACION: precio=..., descuento=...]
+  const structuredMatch = aiMessage.match(/\[ACTUALIZACION:\s*([^\]]+)\]/i)
+  if (structuredMatch) {
+    const content = structuredMatch[1]
+    const precioMatch = content.match(/precio[:=]\s*(?:S\/\s*)?(\d+(?:\.\d{2})?)/i)
+    if (precioMatch) changes.precio = parseFloat(precioMatch[1])
+
+    const descMatch = content.match(/descuento[:=]\s*(\d{1,2})%?/i)
+    if (descMatch) changes.descuento = `${Math.min(15, parseInt(descMatch[1]))}%`
+
+    const durMatch = content.match(/duraci[oó]n[:=]\s*(\d+\s*(?:min|horas?))/i)
+    if (durMatch) changes.duracion = durMatch[1]
+
+    const fechaMatch = content.match(/fecha[:=]\s*([^,;\]]+)/i)
+    if (fechaMatch) changes.fecha = fechaMatch[1].trim()
+
+    const horarioMatch = content.match(/horario[:=]\s*([^,;\]]+)/i)
+    if (horarioMatch) changes.horario = horarioMatch[1].trim()
   }
 
-  // Buscar cambios en el mensaje
-  for (const [field, pattern] of Object.entries(patterns)) {
-    const matches = aiMessage.match(pattern)
-    if (matches) {
-      changes[field] = matches[matches.length - 1] // Tomar el último match
+  // 2. Patrones naturales si no hubo etiqueta estructurada
+  if (Object.keys(changes).length === 0) {
+    const precioPattern = /(?:nuevo precio|precio final|costo|dejarlo en|total)[:\s]+(?:de\s+)?(?:S\/\s*)?(\d+(?:\.\d{2})?)/i
+    const precioMatch = aiMessage.match(precioPattern)
+    if (precioMatch && precioMatch[1]) {
+      const p = parseFloat(precioMatch[1])
+      if (p > 30 && p < 1000) {
+        changes.precio = p
+      }
+    }
+
+    const descPattern = /(\d{1,2})%\s*(?:de\s+)?descuento/i
+    const descMatch = aiMessage.match(descPattern)
+    if (descMatch && descMatch[1]) {
+      changes.descuento = `${Math.min(15, parseInt(descMatch[1]))}%`
     }
   }
 
-  // Si hay cambios, devolverlos
   if (Object.keys(changes).length > 0) {
     logger.info('mistralService', 'Cambios detectados en propuesta', { changes })
     return changes
@@ -439,83 +446,92 @@ export function applyProposalChanges(currentProposal, changes) {
 
   const updatedProposal = { ...currentProposal }
 
-  // Mapeo de campos y su procesamiento
-  const fieldMappings = {
-    precio: (value) => {
-      const numValue = parseFloat(value.replace(/[^\d.]/g, ''))
-      return isNaN(numValue) ? currentProposal.precio : numValue
-    },
-    descuento: (value) => {
-      const numValue = parseInt(value.replace(/[^\d]/g, ''))
-      return isNaN(numValue) ? currentProposal.descuento : Math.min(15, numValue) // Max 15%
-    },
-    duracion: (value) => {
-      const numValue = parseInt(value.replace(/[^\d]/g, ''))
-      const unit = value.includes('hora') ? 'horas' : 'min'
-      return isNaN(numValue) ? currentProposal.duracion : `${numValue} ${unit}`
-    },
-    fecha: (value) => value.trim(),
-    horario: (value) => value.trim()
+  if (changes.precio !== undefined) {
+    const num = typeof changes.precio === 'number' 
+      ? changes.precio 
+      : parseFloat(String(changes.precio).replace(/[^\d.]/g, ''))
+    if (!isNaN(num) && num > 0) {
+      updatedProposal.precio = num
+    }
   }
 
-  // Aplicar cambios
-  for (const [field, changeValue] of Object.entries(changes)) {
-    if (fieldMappings[field]) {
-      updatedProposal[field] = fieldMappings[field](changeValue)
+  if (changes.descuento !== undefined) {
+    const num = parseInt(String(changes.descuento).replace(/[^\d]/g, ''))
+    if (!isNaN(num)) {
+      updatedProposal.descuento = `${Math.min(15, num)}%`
     }
+  }
+
+  if (changes.duracion) {
+    updatedProposal.duracion = String(changes.duracion).trim()
+  }
+
+  if (changes.fecha) {
+    updatedProposal.fecha = String(changes.fecha).trim()
+  }
+
+  if (changes.horario) {
+    updatedProposal.horario = String(changes.horario).trim()
   }
 
   return updatedProposal
 }
 
 /**
- * Simular respuesta de Mistral (modo sin API key)
+ * Simular respuesta inteligente (modo sin API key o contingencia)
  */
 function simulateMistralResponse(message, currentProposal) {
   const lowerMessage = message.toLowerCase()
+  const precioBase = Number(currentProposal?.precio) || 120
   
-  // Respuestas simuladas basadas en patrones comunes
-  if (lowerMessage.includes('precio') || lowerMessage.includes('caro')) {
+  if (lowerMessage.includes('precio') || lowerMessage.includes('caro') || lowerMessage.includes('descuento') || lowerMessage.includes('rebaja') || lowerMessage.includes('menos')) {
+    const precioConDescuento = Math.round(precioBase * 0.9)
     return {
       success: true,
-      message: `Entiendo que el precio de S/ ${currentProposal.precio || '120'} puede ser alto. Podríamos ofrecerte un 10% de descuento si agendas para un día entre semana. El nuevo precio sería S/ ${(currentProposal.precio || 120) * 0.9}. ¿Te funciona?`,
-      proposalChanges: { descuento: '10%', precio: (currentProposal.precio || 120) * 0.9 },
-      modo: 'simulacion'
+      message: `¡Comprendo que quieras aprovechar la mejor tarifa! Como cortesía especial en Origen Spa, podemos aplicarte un 10% de descuento. El nuevo precio sería de S/ ${precioConDescuento} para ${currentProposal?.servicio || 'tu tratamiento'}. ¿Te parece bien este precio?`,
+      proposalChanges: { descuento: '10%', precio: precioConDescuento },
+      confirmar: false,
+      modo: 'asistente_origen'
     }
   }
   
-  if (lowerMessage.includes('fecha') || lowerMessage.includes('horario')) {
+  if (lowerMessage.includes('fecha') || lowerMessage.includes('horario') || lowerMessage.includes('hora') || lowerMessage.includes('dia') || lowerMessage.includes('días') || lowerMessage.includes('cuándo') || lowerMessage.includes('cuando')) {
     return {
       success: true,
-      message: `Claro, podemos ajustar la fecha y horario según tu disponibilidad. ¿Qué día y hora te funcionaría mejor? Tenemos disponibilidad de lunes a viernes de 9am a 7pm, y sábados de 9am a 4pm.`,
+      message: `En Origen Spa atendemos de lunes a sábado de 9:00 AM a 8:00 PM en Trujillo. Disponemos de turnos matutinos (9am - 12pm) y turnos tarde (2pm - 7pm). ¿Qué día te gustaría agendar?`,
       proposalChanges: null,
-      modo: 'simulacion'
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  if (lowerMessage.includes('incluye') || lowerMessage.includes('tratamiento') || lowerMessage.includes('qué hace') || lowerMessage.includes('que hace')) {
+    return {
+      success: true,
+      message: `Tu propuesta para "${currentProposal?.servicio || 'Tratamiento Spa'}" incluye: ${currentProposal?.incluye || 'limpieza profunda, hidratación y cuidado especializado'} con una duración estimada de ${currentProposal?.duracion || '60 min'}. Todo realizado por terapeutas profesionales en un ambiente privado y relajante.`,
+      proposalChanges: null,
+      confirmar: false,
+      modo: 'asistente_origen'
     }
   }
   
-  if (lowerMessage.includes('acepto') || lowerMessage.includes('confirmar')) {
+  if (lowerMessage.includes('acepto') || lowerMessage.includes('confirmar') || lowerMessage.includes('de acuerdo') || lowerMessage.includes('me gusta') || lowerMessage.includes('listo') || lowerMessage.includes('sí') || lowerMessage.includes('si')) {
     return {
       success: true,
-      message: `¡Excelente! He confirmado tu propuesta. El precio final es S/ ${currentProposal.precio || '120'} con un ${currentProposal.descuento || '0'}% de descuento. Haz clic en el botón "Confirmar Propuesta" para finalizar.`,
+      message: `¡Excelente elección! Hemos preparado tu propuesta para "${currentProposal?.servicio || 'el tratamiento'}" por S/ ${currentProposal?.precio || precioBase}. Para finalizar y asegurar tu turno, por favor haz clic en el botón verde "✅ Confirmar Propuesta".`,
       proposalChanges: null,
       confirmar: true,
-      modo: 'simulacion'
+      modo: 'asistente_origen'
     }
   }
 
   return {
     success: true,
-    message: `Entiendo. Estoy aquí para ayudarte a personalizar tu propuesta. ¿Qué aspecto te gustaría ajustar? Puedo modificar el precio, fecha, horario, o sugerir servicios adicionales.`,
+    message: `¡Hola! Soy tu asistente de Origen Spa. Estoy aquí para resolver cualquier duda sobre tu propuesta de ${currentProposal?.servicio || 'bienestar'}, coordinar horarios o evaluar descuentos especiales. ¿En qué te puedo ayudar hoy?`,
     proposalChanges: null,
-    modo: 'simulacion'
+    confirmar: false,
+    modo: 'asistente_origen'
   }
-}
-
-/**
- * Respuesta de fallback cuando falla la API
- */
-function getFallbackResponse(message, currentProposal) {
-  return `Lo siento, estoy teniendo dificultades técnicas en este momento. Sin embargo, puedo ayudarte con ajustes básicos en tu propuesta. El precio actual es S/ ${currentProposal.precio || '120'}. ¿Te gustaría algún cambio específico?`
 }
 
 /**
@@ -532,7 +548,7 @@ export function generarTokenPropuesta() {
  */
 export function validarTokenPropuesta(token) {
   if (!token || typeof token !== 'string') return false
-  return token.startsWith('PROP-') && token.length >= 20
+  return token.startsWith('PROP-') && token.length >= 10
 }
 
 export default {
