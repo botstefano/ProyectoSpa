@@ -267,6 +267,51 @@ export async function aceptarPropuesta(idContacto, datosPropuesta) {
 }
 
 /**
+ * Rechaza una propuesta en Fase 2
+ * Permite al lead o staff rechazar la oferta para negociar una nueva propuesta
+ */
+export async function rechazarPropuesta(idContacto, motivo = 'Rechazada por el cliente') {
+  try {
+    const client = requireSupabase()
+
+    // 1. Actualizar lead_detalle marcando propuesta_aceptada como false
+    const { error: leadDetalleError } = await client
+      .from('lead_detalle')
+      .update({
+        propuesta_aceptada: false,
+        fecha_aceptacion: null
+      })
+      .eq('id_contacto', idContacto)
+
+    if (leadDetalleError) {
+      logger.warn('leadsApi', 'Aviso actualizando lead_detalle al rechazar propuesta', { error: leadDetalleError })
+    }
+
+    // 2. Si existe propuesta_chatbot, actualizar su estado a 'rechazada'
+    const { error: chatPropError } = await client
+      .from('propuesta_chatbot')
+      .update({
+        estado_propuesta: 'rechazada'
+      })
+      .eq('id_contacto', idContacto)
+      .eq('estado_propuesta', 'aceptada')
+
+    if (chatPropError) {
+      logger.warn('leadsApi', 'Aviso actualizando propuesta_chatbot al rechazar', { error: chatPropError })
+    }
+
+    logger.info('leadsApi', `Propuesta rechazada para contacto ${idContacto}`, { motivo })
+    return createResponse(true, { message: 'Propuesta rechazada. Se puede renegociar o generar una nueva oferta.' })
+  } catch (error) {
+    logger.error('leadsApi', 'Error rechazando propuesta', { idContacto, error })
+    return createResponse(false, null, {
+      message: error.message || 'Error al rechazar propuesta',
+      code: error.code || 'REJECT_PROPOSAL_ERROR'
+    })
+  }
+}
+
+/**
  * Actualiza los datos del contacto y del lead_detalle
  */
 export async function actualizarLead(idContacto, datosContacto, datosLeadDetalle) {
