@@ -241,6 +241,8 @@ function validarSolicitud(solicitud, propuestaActual) {
   return { valida: true, servicio: servicioEncontrado }
 }
 
+let mistralCooldownUntil = 0
+
 function isRealMistralKey(key) {
   if (!key || typeof key !== 'string') return false
   const trimmed = key.trim()
@@ -258,15 +260,13 @@ function isRealMistralKey(key) {
 export async function sendMessageToMistral(message, conversationHistory = [], currentProposal = {}, apiKey) {
   // Si no hay API key real configurada, usar el asistente inteligente spa de contingencia
   if (!isRealMistralKey(apiKey)) {
-    logger.warn('mistralService', 'VITE_MISTRAL_API_KEY no configurada o con valor demo. Operando en modo asistente spa local.')
     return simulateMistralResponse(message, currentProposal)
   }
-  
-  // Loggear que la API key está detectada
-  logger.info('mistralService', 'API key de Mistral detectada correctamente', { 
-    keyLength: apiKey.length,
-    keyPrefix: apiKey.substring(0, 8) + '...'
-  })
+
+  // Si Mistral está en cooldown por rate limit (429), responder de inmediato con el asistente spa
+  if (Date.now() < mistralCooldownUntil) {
+    return simulateMistralResponse(message, currentProposal)
+  }
 
   try {
     const validacion = validarSolicitud({ mensaje: message }, currentProposal)
@@ -284,73 +284,75 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       { role: 'user', content: message }
     ]
 
-    logger.info('mistralService', 'Enviando solicitud a Mistral AI', { 
-      messageLength: message.length,
-      hasConversationHistory: conversationHistory.length > 0
-    })
-
-    let retries = 0
-    const maxRetries = 1
+    // Probar primero open-mistral-7b (modelo admitido en cuentas gratuitas), luego mistral-small-latest
+    const modelsToTry = ['open-mistral-7b', 'mistral-small-latest']
     let lastError = null
 
-    while (retries <= maxRetries) {
-      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'mistral-small-latest',
-          messages: messages,
-          temperature: 0.7,
-          max_tokens: 450
+    for (const model of modelsToTry) {
+      try {
+        const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: messages,
+            temperature: 0.7,
+            max_tokens: 450
+          })
         })
-      })
 
-      if (response.status === 429) {
-        logger.warn('mistralService', 'Rate limit en Mistral (429), reintentando...')
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        retries++
-        lastError = new Error('Mistral API (429): Rate limit exceeded')
-        continue
-      }
+        if (response.status === 429) {
+          logger.warn('mistralService', 'Rate limit en Mistral (429); activando asistente spa local sin esperas.')
+          // Cooldown de 60s para no saturar la API ni ralentizar la UI
+          mistralCooldownUntil = Date.now() + 60000
+          return simulateMistralResponse(message, currentProposal)
+        }
 
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => '')
-        throw new Error(`Mistral API (${response.status}): ${errorText || response.statusText}`)
-      }
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '')
+          lastError = new Error(`Mistral API (${response.status}): ${errorText || response.statusText}`)
+          continue
+        }
 
-      const result = await response.json()
-      
-      if (!result.choices || !result.choices[0] || !result.choices[0].message) {
-        throw new Error('Respuesta de Mistral no tiene el formato esperado')
-      }
+        const result = await response.json()
+        
+        if (!result.choices || !result.choices[0] || !result.choices[0].message) {
+          throw new Error('Respuesta de Mistral no tiene el formato esperado')
+        }
 
-      let aiMessage = result.choices[0].message.content || ''
+        let aiMessage = result.choices[0].message.content || ''
 
-      // Procesar la respuesta para detectar cambios en la propuesta
-      const proposalChanges = extractProposalChanges(aiMessage, currentProposal)
+        // Procesar la respuesta para detectar cambios en la propuesta
+        const proposalChanges = extractProposalChanges(aiMessage, currentProposal)
 
-      // Limpiar etiqueta de control [ACTUALIZACION: ...] para no mostrarla textualmente al cliente
-      aiMessage = aiMessage.replace(/\[ACTUALIZACION:[^\]]+\]/gi, '').trim()
+        // Limpiar etiqueta de control [ACTUALIZACION: ...] para no mostrarla textualmente al cliente
+        aiMessage = aiMessage.replace(/\[ACTUALIZACION:[^\]]+\]/gi, '').trim()
 
-      return {
-        success: true,
-        message: aiMessage,
-        proposalChanges: proposalChanges,
-        validacion: validacion,
-        rawResponse: result
+        return {
+          success: true,
+          message: aiMessage,
+          proposalChanges: proposalChanges,
+          validacion: validacion,
+          rawResponse: result
+        }
+      } catch (innerErr) {
+        lastError = innerErr
       }
     }
     
-    if (lastError) throw lastError
+    if (lastError) {
+      logger.warn('mistralService', 'Aviso comunicando con Mistral, activando asistente spa:', { 
+        error: lastError.message 
+      })
+    }
+    return simulateMistralResponse(message, currentProposal)
   } catch (error) {
-    logger.warn('mistralService', 'Error comunicando con Mistral, activando respuesta de contingencia', { 
+    logger.warn('mistralService', 'Aviso comunicando con Mistral, activando asistente spa:', { 
       error: error.message 
     })
-    
-    // Asistente inteligente de contingencia para que el cliente nunca se quede sin respuesta
     return simulateMistralResponse(message, currentProposal)
   }
 }
@@ -478,56 +480,296 @@ export function applyProposalChanges(currentProposal, changes) {
 }
 
 /**
- * Simular respuesta inteligente (modo sin API key o contingencia)
+ * Simular respuesta inteligente (modo sin API key o contingencia por límite de cuota)
  */
 function simulateMistralResponse(message, currentProposal) {
   const lowerMessage = message.toLowerCase()
   const precioBase = Number(currentProposal?.precio) || 120
-  
-  if (lowerMessage.includes('precio') || lowerMessage.includes('caro') || lowerMessage.includes('descuento') || lowerMessage.includes('rebaja') || lowerMessage.includes('menos')) {
-    const precioConDescuento = Math.round(precioBase * 0.9)
-    return {
-      success: true,
-      message: `¡Comprendo que quieras aprovechar la mejor tarifa! Como cortesía especial en Origen Spa, podemos aplicarte un 10% de descuento. El nuevo precio sería de S/ ${precioConDescuento} para ${currentProposal?.servicio || 'tu tratamiento'}. ¿Te parece bien este precio?`,
-      proposalChanges: { descuento: '10%', precio: precioConDescuento },
-      confirmar: false,
-      modo: 'asistente_origen'
-    }
-  }
-  
-  if (lowerMessage.includes('fecha') || lowerMessage.includes('horario') || lowerMessage.includes('hora') || lowerMessage.includes('dia') || lowerMessage.includes('días') || lowerMessage.includes('cuándo') || lowerMessage.includes('cuando')) {
-    return {
-      success: true,
-      message: `En Origen Spa atendemos de lunes a sábado de 9:00 AM a 8:00 PM en Trujillo. Disponemos de turnos matutinos (9am - 12pm) y turnos tarde (2pm - 7pm). ¿Qué día te gustaría agendar?`,
-      proposalChanges: null,
-      confirmar: false,
-      modo: 'asistente_origen'
-    }
-  }
+  const servicioActual = currentProposal?.servicio || 'Tratamiento Spa'
 
-  if (lowerMessage.includes('incluye') || lowerMessage.includes('tratamiento') || lowerMessage.includes('qué hace') || lowerMessage.includes('que hace')) {
+  // 1. Confirmación / Aceptación
+  if (
+    lowerMessage.includes('acepto') ||
+    lowerMessage.includes('confirmar') ||
+    lowerMessage.includes('confirmo') ||
+    lowerMessage.includes('de acuerdo') ||
+    lowerMessage.includes('me gusta') ||
+    lowerMessage.includes('me parece bien') ||
+    lowerMessage.includes('lo tomo') ||
+    lowerMessage.includes('dale') ||
+    lowerMessage.includes('listo') ||
+    lowerMessage.includes('perfecto') ||
+    lowerMessage.includes('agendar') ||
+    lowerMessage.includes('sí quiero') ||
+    lowerMessage.includes('si quiero')
+  ) {
     return {
       success: true,
-      message: `Tu propuesta para "${currentProposal?.servicio || 'Tratamiento Spa'}" incluye: ${currentProposal?.incluye || 'limpieza profunda, hidratación y cuidado especializado'} con una duración estimada de ${currentProposal?.duracion || '60 min'}. Todo realizado por terapeutas profesionales en un ambiente privado y relajante.`,
-      proposalChanges: null,
-      confirmar: false,
-      modo: 'asistente_origen'
-    }
-  }
-  
-  if (lowerMessage.includes('acepto') || lowerMessage.includes('confirmar') || lowerMessage.includes('de acuerdo') || lowerMessage.includes('me gusta') || lowerMessage.includes('listo') || lowerMessage.includes('sí') || lowerMessage.includes('si')) {
-    return {
-      success: true,
-      message: `¡Excelente elección! Hemos preparado tu propuesta para "${currentProposal?.servicio || 'el tratamiento'}" por S/ ${currentProposal?.precio || precioBase}. Para finalizar y asegurar tu turno, por favor haz clic en el botón verde "✅ Confirmar Propuesta".`,
+      message: `¡Excelente decisión! Tu propuesta para "${servicioActual}" por S/ ${currentProposal?.precio || precioBase} está lista para ser formalizada. Para asegurar tu turno en Origen Spa Trujillo, por favor haz clic en el botón verde "✅ Confirmar Propuesta". Al confirmar, podrás elegir tu medio de pago (Yape, Plin, Tarjeta o Transferencia).`,
       proposalChanges: null,
       confirmar: true,
       modo: 'asistente_origen'
     }
   }
 
+  // 2. Oferta de precio específico (ej. "a 80 soles", "puedo pagar 90", "te doy 100", "80")
+  const precioMatch = lowerMessage.match(/(?:s\/\.?\s*|soles\s*|a\s+|pago\s+|tengo\s+|ofrezco\s+|dejarlo en\s+)?(\d{2,3})(?:\s*soles|\s*so|\s*s\/)?/)
+  const numeroDetectado = precioMatch ? parseInt(precioMatch[1], 10) : null
+
+  if (
+    numeroDetectado &&
+    numeroDetectado >= 40 &&
+    numeroDetectado <= 400 &&
+    (lowerMessage.includes('soles') || lowerMessage.includes('s/') || lowerMessage.includes('pago') || lowerMessage.includes('tengo') || lowerMessage.includes('dejarlo') || lowerMessage.includes('ofrezco') || lowerMessage.includes('precio'))
+  ) {
+    // Si la oferta es >= 65 soles o dentro de un rango viable
+    if (numeroDetectado >= 65 && numeroDetectado < precioBase) {
+      const ahorro = precioBase - numeroDetectado
+      const pct = Math.round((ahorro / precioBase) * 100)
+      return {
+        success: true,
+        message: `¡Trato hecho! Como queremos brindarte la mejor experiencia en Origen Spa, aceptamos tu propuesta de S/ ${numeroDetectado} (${pct}% de descuento promocional, ahorras S/ ${ahorro}). Hemos actualizado la tarjeta de propuesta en pantalla. ¿Te parece bien esta tarifa para confirmar?`,
+        proposalChanges: { precio: numeroDetectado, descuento: `${pct}%` },
+        confirmar: false,
+        modo: 'asistente_origen'
+      }
+    } else if (numeroDetectado < 65) {
+      const precioMinimoPosible = 70
+      return {
+        success: true,
+        message: `Por la calidad de los productos orgánicos y la exclusividad del protocolo de cabina privada, lo mínimo que podemos ofrecerte es S/ ${precioMinimoPosible} para ${servicioActual}. Es un precio promocional único. ¿Te gustaría aprovecharlo?`,
+        proposalChanges: { precio: precioMinimoPosible, descuento: '25%' },
+        confirmar: false,
+        modo: 'asistente_origen'
+      }
+    }
+  }
+
+  // 3. Negociación general de descuento o precio elevado
+  if (
+    lowerMessage.includes('precio') ||
+    lowerMessage.includes('caro') ||
+    lowerMessage.includes('descuento') ||
+    lowerMessage.includes('rebaja') ||
+    lowerMessage.includes('menos') ||
+    lowerMessage.includes('promoción') ||
+    lowerMessage.includes('promocion') ||
+    lowerMessage.includes('oferta') ||
+    lowerMessage.includes('estudiante')
+  ) {
+    const precioConDescuento = Math.round(precioBase * 0.85) // 15% descuento
+    const ahorro = precioBase - precioConDescuento
+    return {
+      success: true,
+      message: `¡Comprendo perfectamente! En Origen Spa queremos que disfrutes de tu momento de bienestar, por lo que te aplicamos un 15% de descuento de cortesía. Tu nuevo precio queda en S/ ${precioConDescuento} (ahorras S/ ${ahorro}). La propuesta ya se actualizó en pantalla. ¿Te gustaría confirmar con este beneficio?`,
+      proposalChanges: { descuento: '15%', precio: precioConDescuento },
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  // 4. Solicitud de cambio de servicio
+  if (lowerMessage.includes('descontracturante') || lowerMessage.includes('cuello') || lowerMessage.includes('espalda') || lowerMessage.includes('contractura')) {
+    return {
+      success: true,
+      message: `¡Excelente elección! El Masaje Descontracturante es ideal para liberar tensiones en espalda, cuello y zona lumbar con aceites calientes de eucalipto. Hemos ajustado tu propuesta a "Masaje Descontracturante" por S/ 100 (60 min). ¿Te gustaría este tratamiento?`,
+      proposalChanges: {
+        servicio: 'Masaje Descontracturante',
+        precio: 100,
+        precioRegular: 130,
+        duracion: '60 min',
+        incluye: 'Masaje profundo, aceite de eucalipto, compresas herbales calientes'
+      },
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  if (lowerMessage.includes('piedras') || lowerMessage.includes('volcánica') || lowerMessage.includes('volcanica')) {
+    return {
+      success: true,
+      message: `¡El Masaje con Piedras Calientes es nuestra experiencia más placentera! Combina piedras volcánicas a temperatura terapéutica con aromaterapia de sándalo. Hemos actualizado tu propuesta por S/ 140 (75 min). ¿Qué te parece?`,
+      proposalChanges: {
+        servicio: 'Masaje con Piedras Calientes',
+        precio: 140,
+        precioRegular: 170,
+        duracion: '75 min',
+        incluye: 'Terapia con piedras volcánicas, aceites esenciales y reflexología express'
+      },
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  if (lowerMessage.includes('anti-aging') || lowerMessage.includes('antiaging') || lowerMessage.includes('arruga') || lowerMessage.includes('colágeno') || lowerMessage.includes('colageno')) {
+    return {
+      success: true,
+      message: `El Tratamiento Facial Anti-Aging utiliza ácido hialurónico concentrado y colágeno marino para reafirmar y revitalizar la piel. Hemos actualizado tu propuesta por S/ 130 (90 min). ¿Te gustaría agendar este tratamiento?`,
+      proposalChanges: {
+        servicio: 'Tratamiento Facial Anti-Aging',
+        precio: 130,
+        precioRegular: 160,
+        duracion: '90 min',
+        incluye: 'Limpieza profunda, ácido hialurónico, colágeno marino y máscara LED tensora'
+      },
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  if (lowerMessage.includes('envoltura') || lowerMessage.includes('exfoliación') || lowerMessage.includes('exfoliacion') || lowerMessage.includes('corporal')) {
+    return {
+      success: true,
+      message: `La Envoltura y Exfoliación Corporal renueva la textura de toda tu piel con sales minerales y barro volcánico desintoxicante. Hemos configurado tu propuesta en S/ 120 (75 min). ¿Te gustaría probarla?`,
+      proposalChanges: {
+        servicio: 'Envoltura y Exfoliación Corporal',
+        precio: 120,
+        precioRegular: 150,
+        duracion: '75 min',
+        incluye: 'Exfoliación con sales minerales, envoltura desintoxicante e hidratación con manteca de karité'
+      },
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  if (lowerMessage.includes('relajante') || lowerMessage.includes('relajacion') || lowerMessage.includes('estrés') || lowerMessage.includes('estres')) {
+    return {
+      success: true,
+      message: `El Masaje Relajante es perfecto para desconectar de la rutina diaria con aromaterapia de lavanda y maniobras suaves en todo el cuerpo. Hemos actualizado tu propuesta a S/ 80 (60 min). ¿Te parece bien?`,
+      proposalChanges: {
+        servicio: 'Masaje Relajante',
+        precio: 80,
+        precioRegular: 100,
+        duracion: '60 min',
+        incluye: 'Aromaterapia de lavanda, masaje corporal relajante y té de hierbas al finalizar'
+      },
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  // 5. Horarios, días y disponibilidad
+  if (
+    lowerMessage.includes('fecha') ||
+    lowerMessage.includes('horario') ||
+    lowerMessage.includes('hora') ||
+    lowerMessage.includes('dia') ||
+    lowerMessage.includes('día') ||
+    lowerMessage.includes('días') ||
+    lowerMessage.includes('cuándo') ||
+    lowerMessage.includes('cuando') ||
+    lowerMessage.includes('sábado') ||
+    lowerMessage.includes('sabado') ||
+    lowerMessage.includes('lunes') ||
+    lowerMessage.includes('martes') ||
+    lowerMessage.includes('miércoles') ||
+    lowerMessage.includes('miercoles') ||
+    lowerMessage.includes('jueves') ||
+    lowerMessage.includes('viernes') ||
+    lowerMessage.includes('mañana') ||
+    lowerMessage.includes('tarde')
+  ) {
+    let horarioDetectado = 'Horario flexible a coordinar'
+    if (lowerMessage.includes('sábado') || lowerMessage.includes('sabado')) {
+      horarioDetectado = 'Sábados (turnos disponibles 10:00 AM, 3:00 PM o 5:00 PM)'
+    } else if (lowerMessage.includes('mañana') || lowerMessage.includes('manana')) {
+      horarioDetectado = 'Turno Mañana (entre 9:00 AM y 12:00 PM)'
+    } else if (lowerMessage.includes('tarde') || lowerMessage.includes('noche')) {
+      horarioDetectado = 'Turno Tarde (entre 2:00 PM y 7:00 PM)'
+    }
+
+    return {
+      success: true,
+      message: `En Origen Spa atendemos de lunes a sábado de 9:00 AM a 8:00 PM en Trujillo (domingos cerrado para mantenimiento). Disponemos de turnos matutinos (9am - 12pm) y turnos tarde (2pm - 7pm). Hemos tomado nota de tu preferencia: "${horarioDetectado}". ¿Deseas confirmar la propuesta para reservar ese horario?`,
+      proposalChanges: { horario: horarioDetectado },
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  // 6. Ubicación / Dirección en Trujillo
+  if (
+    lowerMessage.includes('dónde') ||
+    lowerMessage.includes('donde') ||
+    lowerMessage.includes('dirección') ||
+    lowerMessage.includes('direccion') ||
+    lowerMessage.includes('ubicación') ||
+    lowerMessage.includes('ubicacion') ||
+    lowerMessage.includes('queda') ||
+    lowerMessage.includes('llegar')
+  ) {
+    return {
+      success: true,
+      message: `Nos ubicamos en Calle Las Orquídeas 245, Urb. El Golf, Trujillo (a una cuadra del parque principal). Contamos con estacionamiento reservado y áreas privadas climatizadas. Atendemos previa cita de Lunes a Sábado de 9:00 AM a 8:00 PM. ¿Te gustaría agendar tu visita?`,
+      proposalChanges: null,
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  // 7. Medios de pago
+  if (
+    lowerMessage.includes('pago') ||
+    lowerMessage.includes('pagar') ||
+    lowerMessage.includes('tarjeta') ||
+    lowerMessage.includes('yape') ||
+    lowerMessage.includes('plin') ||
+    lowerMessage.includes('transferencia') ||
+    lowerMessage.includes('efectivo') ||
+    lowerMessage.includes('cuotas')
+  ) {
+    return {
+      success: true,
+      message: `Aceptamos Yape, Plin, tarjetas de crédito/débito (Visa, Mastercard, Diners, Amex), transferencias BCP/BBVA y pago en efectivo al llegar. Al confirmar la propuesta se habilitará tu enlace seguro de pago donde podrás elegir pagar al contado o en 2 cuotas. ¿Tienes alguna otra consulta sobre el servicio?`,
+      proposalChanges: null,
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  // 8. Qué incluye / beneficios
+  if (
+    lowerMessage.includes('incluye') ||
+    lowerMessage.includes('tratamiento') ||
+    lowerMessage.includes('qué hace') ||
+    lowerMessage.includes('que hace') ||
+    lowerMessage.includes('beneficio') ||
+    lowerMessage.includes('pasos')
+  ) {
+    return {
+      success: true,
+      message: `Tu propuesta para "${servicioActual}" incluye: ${currentProposal?.incluye || 'evaluación dérmica inicial, protocolo completo con insumos orgánicos, masaje terapéutico y sesión relajante'} con una duración de ${currentProposal?.duracion || '60 min'}. Todo el servicio es ejecutado por terapeutas certificadas en cabina individual. ¿Deseas que te reservemos un cupo?`,
+      proposalChanges: null,
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  // 9. Saludos / cortesía
+  if (
+    lowerMessage.includes('hola') ||
+    lowerMessage.includes('buenas') ||
+    lowerMessage.includes('buenos días') ||
+    lowerMessage.includes('buenos dias') ||
+    lowerMessage.includes('buenas tardes') ||
+    lowerMessage.includes('buenas noches') ||
+    lowerMessage.includes('que tal') ||
+    lowerMessage.includes('qué tal')
+  ) {
+    return {
+      success: true,
+      message: `¡Hola! Qué gusto saludarte. Soy tu asesora virtual de Origen Spa. He preparado tu propuesta para "${servicioActual}" a S/ ${currentProposal?.precio || precioBase}. Puedo ayudarte a ajustar el precio, cambiar de tratamiento, coordinar tu horario en Trujillo o resolver cualquier duda. ¿En qué te puedo ayudar hoy?`,
+      proposalChanges: null,
+      confirmar: false,
+      modo: 'asistente_origen'
+    }
+  }
+
+  // Fallback conversacional
   return {
     success: true,
-    message: `¡Hola! Soy tu asistente de Origen Spa. Estoy aquí para resolver cualquier duda sobre tu propuesta de ${currentProposal?.servicio || 'bienestar'}, coordinar horarios o evaluar descuentos especiales. ¿En qué te puedo ayudar hoy?`,
+    message: `¡Hola! Estoy aquí para asegurarme de que recibas el mejor cuidado en Origen Spa Trujillo. Respecto a tu propuesta de "${servicioActual}" (S/ ${currentProposal?.precio || precioBase}), podemos coordinar tu día de atención, resolver dudas sobre el protocolo o evaluar una tarifa especial. ¿Qué te gustaría consultar?`,
     proposalChanges: null,
     confirmar: false,
     modo: 'asistente_origen'
