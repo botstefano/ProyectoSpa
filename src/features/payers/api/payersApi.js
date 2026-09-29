@@ -227,9 +227,9 @@ export async function procesarPagoCompleto(idContacto, datosPago) {
 }
 
 /**
- * Obtiene detalles de pago de un contacto para el servicio y propuesta actual
+ * Obtiene detalles de pago de un contacto
  */
-export async function obtenerDetallesPago(idContacto, nombreServicio = null, fechaPropuesta = null) {
+export async function obtenerDetallesPago(idContacto) {
   return safeSupabaseOperation(async (client) => {
     try {
       // 1. Consultar pago_detalle primero
@@ -240,54 +240,32 @@ export async function obtenerDetallesPago(idContacto, nombreServicio = null, fec
         .maybeSingle()
 
       if (pagoDetalle && (pagoDetalle.estado_pago === 'confirmado' || pagoDetalle.estado_pago === 'pagado')) {
-        const fechaPagoMs = new Date(pagoDetalle.fecha_pago || 0).getTime()
-        const fechaPropMs = fechaPropuesta ? new Date(fechaPropuesta).getTime() : 0
-        const esPagoAnterior = fechaPropMs > (fechaPagoMs + 30000)
-
-        const sPago = (pagoDetalle.servicio_contratado || '').toLowerCase().trim()
-        const sActual = (nombreServicio || '').toLowerCase().trim()
-        const servicioCoincide = !nombreServicio || (sPago && sActual && (sPago.includes(sActual) || sActual.includes(sPago)))
-
-        if (!esPagoAnterior && servicioCoincide) {
-          return pagoDetalle
-        }
+        return pagoDetalle
       }
 
-      // 2. Si no coincide o fue de un ciclo anterior, consultar pago_simulado completado
-      const { data: pagosSimulados } = await client
+      // 2. Si no hay en pago_detalle o no está confirmado, consultar pago_simulado completado
+      const { data: pagoSimulado } = await client
         .from('pago_simulado')
         .select('*')
         .eq('id_contacto', idContacto)
         .eq('estado_pago', 'completado')
         .order('fecha_completado', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-      if (pagosSimulados && pagosSimulados.length > 0) {
-        const pagoValido = pagosSimulados.find(p => {
-          const fCompMs = new Date(p.fecha_completado || 0).getTime()
-          const fPropMs = fechaPropuesta ? new Date(fechaPropuesta).getTime() : 0
-          const esAnterior = fPropMs > (fCompMs + 30000)
-
-          const sPago = (p.servicio_contratado || '').toLowerCase().trim()
-          const sActual = (nombreServicio || '').toLowerCase().trim()
-          const servicioCoincide = !nombreServicio || (sPago && sActual && (sPago.includes(sActual) || sActual.includes(sPago)))
-
-          return !esAnterior && servicioCoincide
-        })
-
-        if (pagoValido) {
-          return {
-            id_contacto: idContacto,
-            estado_pago: 'confirmado',
-            fecha_pago: pagoValido.fecha_completado,
-            servicio_contratado: pagoValido.servicio_contratado,
-            monto_total: Number(pagoValido.monto_total),
-            metodo_pago: pagoValido.metodo_pago_elegido || 'transferencia',
-            referencia: pagoValido.datos_pago?.operacion || pagoValido.token_pago
-          }
+      if (pagoSimulado) {
+        return {
+          id_contacto: idContacto,
+          estado_pago: 'confirmado',
+          fecha_pago: pagoSimulado.fecha_completado,
+          servicio_contratado: pagoSimulado.servicio_contratado,
+          monto_total: Number(pagoSimulado.monto_total),
+          metodo_pago: pagoSimulado.metodo_pago_elegido || 'transferencia',
+          referencia: pagoSimulado.datos_pago?.operacion || pagoSimulado.token_pago
         }
       }
 
-      return null
+      return pagoDetalle || null
     } catch (error) {
       logger.error('payersApi', 'Error obteniendo detalles de pago', { idContacto, error })
       return null

@@ -159,12 +159,11 @@ function extractServiceFromLead(lead) {
   const chatPropList = Array.isArray(lead.propuesta_chatbot)
     ? lead.propuesta_chatbot
     : [lead.propuesta_chatbot].filter(Boolean)
-  const latestAcceptedObj = chatPropList
+  const latestAccepted = chatPropList
     .slice()
     .sort((a, b) => (b.id_propuesta || 0) - (a.id_propuesta || 0))
-    .find(p => p?.estado_propuesta === 'aceptada')
+    .find(p => p?.estado_propuesta === 'aceptada')?.propuesta_actual
 
-  const latestAccepted = latestAcceptedObj?.propuesta_actual
   const prop = latestAccepted || det?.datos_propuesta || {}
   const desc = Array.isArray(lead.descarga) ? lead.descarga[0] : lead.descarga
 
@@ -184,8 +183,6 @@ function extractServiceFromLead(lead) {
   const nombreCapitalizado = nombreServicio.charAt(0).toUpperCase() + nombreServicio.slice(1)
 
   return {
-    idPropuesta: latestAcceptedObj?.id_propuesta || null,
-    fechaAceptacion: latestAcceptedObj?.fecha_aceptacion || det?.fecha_aceptacion || null,
     nombre: nombreCapitalizado,
     categoria: 'Wellness',
     duracion: prop.duracion || '60 minutos',
@@ -248,8 +245,7 @@ export default function PayersStaffPage() {
     try {
       const cronograma = await crearCronogramaPagos(lead.id_contacto, clientService.nombre, clientService.total, 3)
 
-      // Pasar nombre del servicio y fecha de propuesta para que NO tome un pago de un servicio anterior
-      const detalles = await obtenerDetallesPago(lead.id_contacto, clientService.nombre, clientService.fechaAceptacion)
+      const detalles = await obtenerDetallesPago(lead.id_contacto)
       const isPaid = detalles && ((detalles.estado_pago || '').toLowerCase() === 'confirmado' || (detalles.estado_pago || '').toLowerCase() === 'pagado')
 
       if (isPaid) {
@@ -512,11 +508,11 @@ export default function PayersStaffPage() {
         </section>
 
         <section className="payers-stepper" aria-label="Flujo PAYERS">
-          <Step number="1" label="Propuesta aceptada" status="done" />
-          <Step number="2" label="Cobro (Online o Caja)" status="done" />
-          <Step number="3" label="Validación en caja" active />
-          <Step number="4" label="Servicio activado" status={initialPaid ? 'done' : undefined} />
-          <Step number="5" label="Pase a Clientes (F4)" status={initialPaid ? 'done' : undefined} />
+          <Step number="1" label="Confirmación del servicio" status="done" />
+          <Step number="2" label="Formalización de la contratación" status="done" />
+          <Step number="3" label="Registro de pago" active />
+          <Step number="4" label="Validación" />
+          <Step number="5" label="Servicio activado" status={initialPaid ? 'done' : undefined} />
         </section>
 
         <div className={`payers-note ${source === 'supabase' ? 'supabase-connected' : 'demo-mode'}`}>
@@ -592,10 +588,10 @@ export default function PayersStaffPage() {
                           }}
                         >
                           <span>{c.nombre}</span>
-                          {isSelected && isConfirmed ? (
+                          {c.id_estado === 3 || c.estado_contacto?.nombre_estado === 'payer' ? (
                             <span style={{ background: '#b7d2b9', color: '#16231C', fontSize: '10px', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>✓ Pagado</span>
                           ) : (
-                            <span style={{ background: 'rgba(232, 202, 143, 0.22)', color: '#e8ca8f', fontSize: '10px', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>Por pagar</span>
+                            <span style={{ opacity: 0.7, fontSize: '11px' }}>({cDet?.lead_score || 50} pts)</span>
                           )}
                         </button>
                       )
@@ -886,9 +882,7 @@ export default function PayersStaffPage() {
                   <div>
                     <h3>{initialPaid ? 'Seguimiento programado' : 'Alerta de impulsamiento'}</h3>
                     {initialPaid ? (
-                      <p>
-                        Próxima cuota: {schedule.find((s) => s.estado !== 'Pagada')?.vencimiento || 'Todas las cuotas al día'} → recordatorio automático programado.
-                      </p>
+                      <p>Próxima cuota: 01/10/2026 → recordatorio automático 2 días antes.</p>
                     ) : (
                       <p>Pago inicial pendiente → recordatorio automático antes del vencimiento.</p>
                     )}
@@ -903,13 +897,9 @@ export default function PayersStaffPage() {
             <article className="payers-card payment-register-card">
               <div className="payers-card-title">
                 <div>
-                  <h2>6. Caja y Conciliación de Pagos (Recepción)</h2>
-                  <span className="payers-card-sub">Uso de recepción · Registra cobros presenciales o valida comprobantes.</span>
+                  <h2>6. Registro de pago</h2>
+                  <span className="payers-card-sub">Paso 3 de 5 · registra el intento y su resultado.</span>
                 </div>
-              </div>
-
-              <div style={{ marginBottom: '12px', fontSize: '13px', color: 'rgba(255,255,255,0.75)' }}>
-                Medio de pago recibido en el local o comprobado:
               </div>
 
               <div className="payment-method-grid">
@@ -928,7 +918,7 @@ export default function PayersStaffPage() {
               </div>
 
               <div className="form-field">
-                <label htmlFor="amount">Monto cobrado / verificado</label>
+                <label htmlFor="amount">Monto a registrar</label>
                 <div className="input-with-prefix">
                   <span>S/</span>
                   <input id="amount" type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
@@ -937,42 +927,42 @@ export default function PayersStaffPage() {
               </div>
 
               <div className="form-field">
-                <label htmlFor="payment-date">Fecha de registro</label>
+                <label htmlFor="payment-date">Fecha de pago</label>
                 <div className="input-with-icon">
-                  <input id="payment-date" type="text" value={new Date().toLocaleDateString('es-ES')} readOnly />
+                  <input id="payment-date" type="text" value="17/09/2026" readOnly />
                   <Icon name="calendar" size={19} />
                 </div>
               </div>
 
               <div className="form-field">
-                <label htmlFor="result">Estado de la validación</label>
+                <label htmlFor="result">Resultado de la operación</label>
                 <select id="result" value={result} onChange={(event) => setResult(event.target.value)}>
-                  <option value="confirmado">Confirmado (Dinero recibido en caja/banco)</option>
-                  <option value="pendiente">Pendiente de validación bancaria</option>
-                  <option value="rechazado">Rechazado (Comprobante inválido/fondos insuficientes)</option>
+                  <option value="confirmado">Confirmado</option>
+                  <option value="pendiente">Pendiente de validación</option>
+                  <option value="rechazado">Rechazado</option>
                 </select>
               </div>
 
               <div className="form-field">
-                <label htmlFor="reference">N° Operación / Referencia <span>(opcional)</span></label>
+                <label htmlFor="reference">Referencia / observación <span>(opcional)</span></label>
                 <input
                   id="reference"
                   type="text"
                   value={reference}
                   onChange={(event) => setReference(event.target.value)}
-                  placeholder="Ej. N° de operación BCP, titular de Yape, voucher POS"
+                  placeholder="Ej. N° de operación, nombre del titular, etc."
                 />
               </div>
 
               <button className="primary-payment-button" type="button" onClick={registerPayment}>
-                <Icon name="check" size={17} />
-                Registrar Cobro en Caja / Validar Abono
+                <Icon name="lock" size={17} />
+                Registrar pago
               </button>
 
               <p className="secure-note">
                 {source === 'supabase' 
-                  ? 'Registra el ingreso en caja y actualiza el saldo del cliente en la base de datos.' 
-                  : 'Módulo de caja para recepción: Permite validar cobros en persona o conciliar comprobantes de pago.'}
+                  ? 'Registro de pago en base de datos. Validación del método de pago según configuración del negocio.' 
+                  : 'En una implementación real, el medio digital se valida contra el proveedor de pagos. Esta versión académica simula la confirmación.'}
               </p>
 
               {notice && <div className="payers-toast" role="status">{notice}</div>}

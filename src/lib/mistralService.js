@@ -284,8 +284,8 @@ export async function sendMessageToMistral(message, conversationHistory = [], cu
       { role: 'user', content: message }
     ]
 
-    // Probar primero modelos abiertos (admitidos en cuentas gratuitas), luego modelos comerciales
-    const modelsToTry = ['open-mistral-7b', 'open-mistral-nemo', 'mistral-small-latest']
+    // Probar primero open-mistral-7b (modelo admitido en cuentas gratuitas), luego mistral-small-latest
+    const modelsToTry = ['open-mistral-7b', 'mistral-small-latest']
     let lastError = null
 
     for (const model of modelsToTry) {
