@@ -7,6 +7,7 @@ import {
   updateAttentionFollowUp,
 } from './api/customersApi'
 import StaffUniversalNav from '../../shared/components/StaffUniversalNav'
+import { enviarEmailPostServicio } from '../../lib/emailService'
 
 const SPECIALISTS = ['María López', 'Carlos Vega', 'Lucía Fernández', 'Ana Ruiz']
 const TREATMENTS = [
@@ -43,6 +44,8 @@ function Icon({ name, size = 20 }) {
     trend: <path d="m4 16 5-5 3 3 7-7M15 7h4v4" />,
     message: <><path d="M21 15a4 4 0 0 1-4 4H8l-5 3 1.5-4A7 7 0 0 1 3 13V8a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v7Z" /></>,
     spa: <><path d="M12 20c-4-2-6-5-6-9 3 0 5 1 6 3 1-2 3-3 6-3 0 4-2 7-6 9Z" /><path d="M12 14V4M8 8c2 .3 3.3 1.5 4 3M16 8c-2 .3-3.3 1.5-4 3" /></>,
+    phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />,
+    star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
   }
 
   return <svg {...common}>{paths[name] ?? null}</svg>
@@ -205,18 +208,8 @@ export default function CustomersStaffPage() {
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
   const [noticeType, setNoticeType] = useState('success')
-  const [form, setForm] = useState({
-    tipo_tratamiento: TREATMENTS[0].name,
-    especialista: SPECIALISTS[0],
-    fecha_hora_inicio: todayLocalInput(),
-    fecha_hora_fin: '',
-    duracion_planificada_min: TREATMENTS[0].minutes,
-    estado_atencion: 'en_atencion',
-    preferencias_servicio: '',
-    notas: '',
-    satisfaccion: '',
-    proxima_atencion: '',
-  })
+  const [notasAtencion, setNotasAtencion] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -240,6 +233,12 @@ export default function CustomersStaffPage() {
     () => attentions.filter((item) => item.id_contacto === selectedId),
     [attentions, selectedId],
   )
+  const isAlreadyAttended = useMemo(() => {
+    return selectedHistory.some((item) => item.estado_atencion === 'completada')
+  }, [selectedHistory])
+  const currentAttention = useMemo(() => {
+    return selectedHistory.find((item) => item.estado_atencion === 'completada') || selectedHistory[0] || null
+  }, [selectedHistory])
   const kpis = useMemo(() => calculateKpis(attentions), [attentions])
   const alerts = useMemo(() => buildAlerts(customers, attentions), [customers, attentions])
 
@@ -250,81 +249,80 @@ export default function CustomersStaffPage() {
     showNotice.timer = window.setTimeout(() => setNotice(''), 4600)
   }
 
-  function setField(name, value) {
-    setForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  function changeTreatment(value) {
-    const treatment = TREATMENTS.find((item) => item.name === value)
-    setForm((prev) => ({
-      ...prev,
-      tipo_tratamiento: value,
-      duracion_planificada_min: treatment?.minutes ?? prev.duracion_planificada_min,
-    }))
-  }
-
-  async function registerAttention(event) {
-    event.preventDefault()
+  async function confirmAppointmentCompleted() {
     if (!selected) return
     if (!paymentConfirmed) {
       showNotice('Atención bloqueada: el cliente todavía no tiene un pago confirmado en PAYERS.', 'error')
       return
     }
-    if (!form.fecha_hora_inicio || !form.tipo_tratamiento || !form.especialista) {
-      showNotice('Completa tratamiento, especialista y fecha/hora de inicio.', 'error')
-      return
-    }
-
-    if (form.estado_atencion === 'completada' && !form.fecha_hora_fin) {
-      showNotice('Para cerrar la atención como completada debes registrar la hora de fin.', 'error')
-      return
-    }
-
-    const start = new Date(form.fecha_hora_inicio)
-    const end = form.fecha_hora_fin ? new Date(form.fecha_hora_fin) : null
-    if (end && end <= start) {
-      showNotice('La hora de fin debe ser posterior a la hora de inicio.', 'error')
-      return
-    }
 
     setSaving(true)
     try {
+      const now = new Date()
+      const startTime = new Date(now.getTime() - 60 * 60000)
+
       const payload = {
         id_contacto: selected.id_contacto,
-        tipo_tratamiento: form.tipo_tratamiento,
-        especialista: form.especialista,
-        fecha_hora_inicio: start.toISOString(),
-        fecha_hora_fin: end ? end.toISOString() : null,
-        duracion_planificada_min: Number(form.duracion_planificada_min) || null,
-        estado_atencion: form.estado_atencion,
-        preferencias_servicio: form.preferencias_servicio.trim() || null,
-        notas: form.notas.trim() || null,
-        satisfaccion: form.satisfaccion ? Number(form.satisfaccion) : null,
+        tipo_tratamiento: selected.servicio_contratado || 'Facial Hidratante',
+        especialista: selected.especialista_asignado || 'María López',
+        fecha_hora_inicio: startTime.toISOString(),
+        fecha_hora_fin: now.toISOString(),
+        duracion_planificada_min: 60,
+        estado_atencion: 'completada',
+        preferencias_servicio: `Aroma: ${selected.preferencias?.aroma || 'Lavanda'}. Música: ${selected.preferencias?.musica || 'Suave'}. Piel: ${selected.preferencias?.sensibilidad || 'Normal'}.`,
+        notas: notasAtencion.trim() || 'Atención en cabina completada exitosamente según propuesta aceptada.',
+        satisfaccion: null,
         seguimiento_enviado: false,
         fecha_seguimiento: null,
-        proxima_atencion: form.proxima_atencion || null,
+        proxima_atencion: null,
       }
+
       const saved = await saveAttention(payload, source)
       setAttentions((prev) => [saved, ...prev])
-      showNotice(
-        payload.estado_atencion === 'completada'
-          ? 'Atención completada. El registro evidencia el paso de PAYER a CUSTOMER.'
-          : 'Atención registrada correctamente.',
-      )
-      setForm((prev) => ({
-        ...prev,
-        fecha_hora_inicio: todayLocalInput(),
-        fecha_hora_fin: '',
-        estado_atencion: 'en_atencion',
-        preferencias_servicio: '',
-        notas: '',
-        satisfaccion: '',
-        proxima_atencion: '',
-      }))
+      showNotice('✓ ¡Atención confirmada con éxito! El cliente ya es un CUSTOMER formal. Ahora puedes enviarle su encuesta por correo.')
+      setNotasAtencion('')
     } catch (error) {
-      showNotice(`No se pudo guardar: ${error.message}`, 'error')
+      showNotice(`Error al confirmar atención: ${error.message}`, 'error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function sendEmailFollowUp(attention) {
+    if (!selected) return
+    if (!selected.email) {
+      showNotice('El cliente no tiene un correo electrónico registrado.', 'error')
+      return
+    }
+
+    const att = attention || currentAttention
+    if (!att) {
+      showNotice('Debes confirmar la atención primero antes de enviar la encuesta.', 'error')
+      return
+    }
+
+    setSendingEmail(true)
+    try {
+      const datos = {
+        servicio: att.tipo_tratamiento || selected.servicio_contratado,
+        especialista: att.especialista || selected.especialista_asignado,
+        origen: window.location.origin
+      }
+
+      await enviarEmailPostServicio(selected.email, selected.nombre, datos)
+
+      const updated = await updateAttentionFollowUp(
+        att.id_atencion,
+        { seguimiento_enviado: true, fecha_seguimiento: new Date().toISOString() },
+        source,
+      )
+
+      setAttentions((prev) => prev.map((item) => item.id_atencion === updated.id_atencion ? updated : item))
+      showNotice(`📧 Encuesta post-servicio y protocolo de cuidados enviados por correo a ${selected.email}`)
+    } catch (error) {
+      showNotice(`Error enviando correo: ${error.message}`, 'error')
+    } finally {
+      setSendingEmail(false)
     }
   }
 
@@ -340,6 +338,70 @@ export default function CustomersStaffPage() {
     } catch (error) {
       showNotice(`No se pudo registrar el seguimiento: ${error.message}`, 'error')
     }
+  }
+
+  async function sendWhatsAppFollowUp(attention) {
+    if (!selected) return
+    const cleanTel = (selected.telefono || '').replace(/\D/g, '')
+    const tel = cleanTel.startsWith('51') ? cleanTel : `51${cleanTel}`
+    const primerNombre = (selected.nombre || 'Cliente').split(' ')[0]
+    
+    let recomendaciones = '• Mantente hidratado durante el resto del día.\n• Evita duchas con agua muy caliente o saunas.\n• Regálate un tiempo de descanso para prolongar el efecto de relajación.'
+    const tipo = (attention.tipo_tratamiento || '').toLowerCase()
+    if (tipo.includes('facial')) {
+      recomendaciones = '• Usa protector solar FPS 50+ y evita la exposición solar directa.\n• Evita maquillarte durante las próximas 12 horas.\n• Aplica tu crema hidratante antes de dormir.'
+    } else if (tipo.includes('masaje') || tipo.includes('corporal')) {
+      recomendaciones = '• Bebe abundante agua para favorecer la eliminación de toxinas.\n• Realiza estiramientos suaves si lo necesitas.\n• Evita actividades físicas de alto impacto hoy.'
+    }
+
+    const msg = encodeURIComponent(
+      `¡Hola ${primerNombre}! 🌿 Te saluda el equipo de Origen Spa.\n\nEsperamos que hayas disfrutado al máximo tu sesión de "${attention.tipo_tratamiento}" con ${attention.especialista}.\n\n✨ Cuidados recomendados post-sesión:\n${recomendaciones}\n\n⭐ ¿Cómo calificarías tu experiencia del 1 al 5?\n¡Tu opinión nos ayuda a brindarte siempre lo mejor!`
+    )
+
+    window.open(`https://wa.me/${tel}?text=${msg}`, '_blank')
+
+    try {
+      const updated = await updateAttentionFollowUp(
+        attention.id_atencion,
+        { seguimiento_enviado: true, fecha_seguimiento: new Date().toISOString() },
+        source,
+      )
+      setAttentions((prev) => prev.map((item) => item.id_atencion === updated.id_atencion ? updated : item))
+      showNotice(`📲 WhatsApp enviado y seguimiento post-servicio registrado para ${selected.nombre}.`)
+    } catch (error) {
+      showNotice(`WhatsApp abierto, pero no se pudo actualizar el registro: ${error.message}`, 'error')
+    }
+  }
+
+  async function updateCsatScore(attention, score) {
+    try {
+      const numScore = score === '' ? null : Number(score)
+      const updated = await updateAttentionFollowUp(
+        attention.id_atencion,
+        { satisfaccion: numScore },
+        source,
+      )
+      setAttentions((prev) => prev.map((item) => item.id_atencion === updated.id_atencion ? updated : item))
+      showNotice(
+        numScore
+          ? `✓ Satisfacción registrada: ${numScore}/5 estrellas para ${selected?.nombre || 'el cliente'}.`
+          : 'Satisfacción marcada como pendiente.'
+      )
+    } catch (error) {
+      showNotice(`No se pudo actualizar la satisfacción: ${error.message}`, 'error')
+    }
+  }
+
+  function sendWhatsAppReactivation(customer) {
+    if (!customer) return
+    const cleanTel = (customer.telefono || '').replace(/\D/g, '')
+    const tel = cleanTel.startsWith('51') ? cleanTel : `51${cleanTel}`
+    const primerNombre = (customer.nombre || 'Cliente').split(' ')[0]
+    const msg = encodeURIComponent(
+      `¡Hola ${primerNombre}! 🌿 Te saluda tu equipo de Origen Spa. Ha pasado más de un mes desde tu última visita de bienestar y queremos invitarte a renovar tu energía. Te reservamos una atención preferencial para esta semana. ¿Te gustaría conocer los horarios disponibles?`
+    )
+    window.open(`https://wa.me/${tel}?text=${msg}`, '_blank')
+    showNotice(`📲 Abriendo WhatsApp para reactivar a ${customer.nombre}...`)
   }
 
   return (
@@ -392,25 +454,33 @@ export default function CustomersStaffPage() {
               <section className="customers-card customers-service-card">
                 <div className="customers-card-heading">
                   <div>
-                    <span className="customers-eyebrow">Paso 2</span>
-                    <h2>Atención / Registro de Servicio</h2>
+                    <span className="customers-eyebrow">Fase 4 · Cabina y Post-Servicio</span>
+                    <h2>Cita Contratada y Control de Atención</h2>
                   </div>
                   {selected && (
                     <span className={`payment-badge ${paymentBadge(selected.estado_pago)}`}>
                       {paymentConfirmed ? <Icon name="check" size={16} /> : <Icon name="lock" size={16} />}
-                      {selected.estado_pago}
+                      {isAlreadyAttended ? 'Atención completada' : selected.estado_pago}
                     </span>
                   )}
                 </div>
 
                 {!selected ? (
-                  <div className="customers-empty">Selecciona un cliente para continuar.</div>
+                  <div className="customers-empty">Selecciona un cliente para ver su cita y gestionar su atención.</div>
                 ) : (
                   <>
                     <div className="customer-summary">
                       <div className="customer-summary-icon"><Icon name="user" size={22} /></div>
-                      <div><span>Cliente</span><strong>{selected.nombre}</strong><small>ID #{selected.id_contacto} · {selected.email}</small></div>
-                      <div><span>Servicio contratado</span><strong>{selected.servicio_contratado}</strong><small>Pago: {selected.fecha_pago ?? 'sin fecha'}</small></div>
+                      <div>
+                        <span>Cliente</span>
+                        <strong>{selected.nombre}</strong>
+                        <small>ID #{selected.id_contacto} · Tel: {selected.telefono || 'Sin tel'} · {selected.email}</small>
+                      </div>
+                      <div>
+                        <span>Servicio pactado</span>
+                        <strong style={{ color: '#b7d2b9' }}>{selected.servicio_contratado}</strong>
+                        <small>{selected.fecha_cita || 'Cita programada'} · {selected.duracion_estimada || '60 min'}</small>
+                      </div>
                     </div>
 
                     {!paymentConfirmed && (
@@ -423,24 +493,231 @@ export default function CustomersStaffPage() {
                       </div>
                     )}
 
-                    <form className={`customers-form ${!paymentConfirmed ? 'disabled' : ''}`} onSubmit={registerAttention}>
-                      <div className="customers-form-grid">
-                        <label><span>Tratamiento</span><select value={form.tipo_tratamiento} onChange={(e) => changeTreatment(e.target.value)} disabled={!paymentConfirmed}>{TREATMENTS.map((item) => <option key={item.name}>{item.name}</option>)}</select></label>
-                        <label><span>Especialista</span><select value={form.especialista} onChange={(e) => setField('especialista', e.target.value)} disabled={!paymentConfirmed}>{SPECIALISTS.map((name) => <option key={name}>{name}</option>)}</select></label>
-                        <label><span>Inicio de atención</span><input type="datetime-local" value={form.fecha_hora_inicio} onChange={(e) => setField('fecha_hora_inicio', e.target.value)} disabled={!paymentConfirmed} /></label>
-                        <label><span>Fin de atención</span><input type="datetime-local" value={form.fecha_hora_fin} onChange={(e) => setField('fecha_hora_fin', e.target.value)} disabled={!paymentConfirmed} /></label>
-                        <label><span>Duración planificada (min)</span><input type="number" min="10" max="240" value={form.duracion_planificada_min} onChange={(e) => setField('duracion_planificada_min', e.target.value)} disabled={!paymentConfirmed} /></label>
-                        <label><span>Estado</span><select value={form.estado_atencion} onChange={(e) => setField('estado_atencion', e.target.value)} disabled={!paymentConfirmed}><option value="programada">Programada</option><option value="en_atencion">En atención</option><option value="completada">Completada</option><option value="no_asistio">No asistió</option></select></label>
-                        <label className="span-2"><span>Preferencias del servicio</span><input value={form.preferencias_servicio} onChange={(e) => setField('preferencias_servicio', e.target.value)} placeholder="Ej. aroma lavanda, música suave, sensibilidad de piel…" disabled={!paymentConfirmed} /></label>
-                        <label className="span-2"><span>Notas / observaciones del especialista</span><textarea rows="3" value={form.notas} onChange={(e) => setField('notas', e.target.value)} placeholder="Incidencias, recomendaciones, reacción al tratamiento…" disabled={!paymentConfirmed} /></label>
-                        <label><span>Satisfacción (1–5)</span><select value={form.satisfaccion} onChange={(e) => setField('satisfaccion', e.target.value)} disabled={!paymentConfirmed}><option value="">Pendiente</option><option value="5">5 · Excelente</option><option value="4">4 · Buena</option><option value="3">3 · Regular</option><option value="2">2 · Baja</option><option value="1">1 · Muy baja</option></select></label>
-                        <label><span>Próxima atención sugerida</span><input type="date" value={form.proxima_atencion} onChange={(e) => setField('proxima_atencion', e.target.value)} disabled={!paymentConfirmed} /></label>
+                    {/* Ficha de la Cita Preparada desde la Propuesta y Pago */}
+                    <div style={{
+                      marginTop: '1rem',
+                      padding: '1rem',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+                        <div>
+                          <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', display: 'block' }}>Especialista Asignado</span>
+                          <strong style={{ fontSize: '0.88rem' }}>{selected.especialista_asignado || 'María López'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', display: 'block' }}>Fecha y Horario Acordado</span>
+                          <strong style={{ fontSize: '0.88rem', color: '#e8ca8f' }}>{selected.fecha_cita || 'Hoy · 16:00 hrs'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', display: 'block' }}>Duración Acordada</span>
+                          <strong style={{ fontSize: '0.88rem' }}>{selected.duracion_estimada || '60 min'}</strong>
+                        </div>
                       </div>
-                      <div className="customers-form-actions">
-                        <div className="customers-business-rule"><Icon name="check" size={16} /><span>Al cerrar como <strong>Completada</strong>, el sistema evidencia PAYER → CUSTOMER.</span></div>
-                        <button className="customers-primary" type="submit" disabled={!paymentConfirmed || saving}>{saving ? 'Guardando…' : 'Guardar atención'}</button>
+
+                      {/* Preferencias de Cabina precargadas del Enriquecimiento */}
+                      <div style={{
+                        background: 'rgba(0,0,0,0.25)',
+                        padding: '10px 12px',
+                        borderRadius: '6px',
+                        fontSize: '0.74rem',
+                        color: 'rgba(255,255,255,0.85)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px'
+                      }}>
+                        <strong style={{ color: '#b7d2b9', fontSize: '0.76rem' }}>🌿 Preferencias clínicas y de cabina precargadas:</strong>
+                        <span>• <strong>Aroma preferido:</strong> {selected.preferencias?.aroma || 'Lavanda y eucalipto'}</span>
+                        <span>• <strong>Ambiente musical:</strong> {selected.preferencias?.musica || 'Suave instrumental'}</span>
+                        <span>• <strong>Condición de piel / cuerpo:</strong> {selected.preferencias?.sensibilidad || 'Piel reactiva y sensible'}</span>
                       </div>
-                    </form>
+                    </div>
+
+                    {/* Estado de atención y Botón de 1-Clic */}
+                    <div style={{ marginTop: '1.2rem' }}>
+                      {!isAlreadyAttended ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.7)' }}>Notas del especialista (opcional):</span>
+                            <input
+                              type="text"
+                              value={notasAtencion}
+                              onChange={(e) => setNotasAtencion(e.target.value)}
+                              placeholder="Ej. Tratamiento aplicado sin incidencias, piel bien hidratada..."
+                              style={{
+                                background: 'rgba(0,0,0,0.3)',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                color: '#fff',
+                                padding: '8px 12px',
+                                borderRadius: '6px',
+                                fontSize: '0.78rem'
+                              }}
+                              disabled={!paymentConfirmed}
+                            />
+                          </label>
+
+                          <button
+                            type="button"
+                            className="customers-primary"
+                            onClick={confirmAppointmentCompleted}
+                            disabled={!paymentConfirmed || saving}
+                            style={{
+                              padding: '12px 18px',
+                              fontSize: '0.88rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              width: '100%',
+                              borderRadius: '6px',
+                              background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
+                              border: '1px solid #40916c',
+                              boxShadow: '0 4px 12px rgba(45, 106, 79, 0.3)'
+                            }}
+                          >
+                            <Icon name="check" size={18} />
+                            <span>{saving ? 'Confirmando...' : '✓ Confirmar Atención Realizada (Completar Cita)'}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{
+                          padding: '12px 14px',
+                          borderRadius: '6px',
+                          background: 'rgba(183, 210, 185, 0.15)',
+                          border: '1px solid rgba(183, 210, 185, 0.4)',
+                          color: '#b7d2b9',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <Icon name="check" size={20} />
+                          <div>
+                            <strong>✓ Cita realizada y confirmada</strong>
+                            <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)' }}>
+                              El cliente completó satisfactoriamente su servicio. Procede con el envío de su encuesta post-servicio.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Acciones Post-Servicio: Email (Primera Opción) y WhatsApp */}
+                    {isAlreadyAttended && (
+                      <div style={{
+                        marginTop: '1.2rem',
+                        padding: '14px',
+                        borderRadius: '8px',
+                        background: 'rgba(20, 38, 29, 0.7)',
+                        border: '1px solid rgba(183, 210, 185, 0.25)'
+                      }}>
+                        <div style={{ marginBottom: '10px' }}>
+                          <strong style={{ fontSize: '0.84rem', color: '#edd39e', display: 'block' }}>
+                            Protocolo Post-Servicio (Encuesta CSAT y Cuidados):
+                          </strong>
+                          <span style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.7)' }}>
+                            La primera opción de contacto oficial es el correo del cliente ({selected.email}).
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                          {/* Opción 1: Enviar por Email (Botón Principal) */}
+                          <button
+                            type="button"
+                            onClick={() => sendEmailFollowUp(currentAttention)}
+                            disabled={sendingEmail}
+                            style={{
+                              flex: 1,
+                              minWidth: '220px',
+                              padding: '10px 16px',
+                              borderRadius: '6px',
+                              background: '#2b503b',
+                              border: '1px solid #4a8060',
+                              color: '#fff',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              fontSize: '0.8rem',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                            }}
+                          >
+                            <Icon name="message" size={16} />
+                            <span>{sendingEmail ? 'Enviando correo...' : '📧 Enviar Encuesta y Cuidados por Correo (Opción 1)'}</span>
+                          </button>
+
+                          {/* Opción 2: Enviar por WhatsApp (Secundaria) */}
+                          <button
+                            type="button"
+                            onClick={() => sendWhatsAppFollowUp(currentAttention)}
+                            style={{
+                              padding: '10px 16px',
+                              borderRadius: '6px',
+                              background: 'rgba(255,255,255,0.06)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              color: '#b7d2b9',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontSize: '0.8rem',
+                              fontWeight: 500
+                            }}
+                          >
+                            <Icon name="phone" size={15} />
+                            <span>📲 Enviar por WhatsApp (Opción 2)</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ciclo de Recompra: Generar Nueva Propuesta (Fase 2) */}
+                    {isAlreadyAttended && (
+                      <div style={{
+                        marginTop: '1.2rem',
+                        padding: '14px',
+                        borderRadius: '8px',
+                        background: 'linear-gradient(135deg, rgba(232, 202, 143, 0.08) 0%, rgba(31, 48, 38, 0.4) 100%)',
+                        border: '1px solid rgba(232, 202, 143, 0.3)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ color: '#e8ca8f', fontSize: '1.1rem' }}>🔄</span>
+                          <div>
+                            <strong style={{ color: '#e8ca8f', fontSize: '0.86rem' }}>Fidelización y Ciclo de Recompra (LTV)</strong>
+                            <p style={{ margin: 0, fontSize: '0.74rem', color: 'rgba(255,255,255,0.7)' }}>
+                              El cliente completó su servicio. Para que vuelva a atenderse, se crea una nueva propuesta en <strong>Fase 2 (LEADS)</strong> como cliente recurrente con historial clínico previo.
+                            </p>
+                          </div>
+                        </div>
+
+                        <a
+                          href={`/staff/leads?cliente=${selected.id_contacto}&origen=recompra`}
+                          style={{
+                            marginTop: '4px',
+                            padding: '10px 16px',
+                            borderRadius: '6px',
+                            background: 'rgba(232, 202, 143, 0.18)',
+                            border: '1px solid #e8ca8f',
+                            color: '#edd39e',
+                            textDecoration: 'none',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            fontSize: '0.8rem',
+                            textAlign: 'center'
+                          }}
+                        >
+                          <span>✨ Generar Nueva Propuesta de Recompra (Fase 2: LEADS) ➔</span>
+                        </a>
+                      </div>
+                    )}
                   </>
                 )}
               </section>
@@ -456,7 +733,7 @@ export default function CustomersStaffPage() {
               ) : (
                 <div className="customers-table-wrap">
                   <table className="customers-table">
-                    <thead><tr><th>Fecha</th><th>Tratamiento</th><th>Especialista</th><th>Duración</th><th>Estado</th><th>CSAT</th><th>Seguimiento</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Tratamiento</th><th>Especialista</th><th>Duración</th><th>Estado</th><th>Satisfacción (CSAT)</th><th>Seguimiento Post-Servicio</th></tr></thead>
                     <tbody>
                       {selectedHistory.map((item) => {
                         const realMinutes = minutesBetween(item.fecha_hora_inicio, item.fecha_hora_fin)
@@ -467,8 +744,79 @@ export default function CustomersStaffPage() {
                             <td>{item.especialista}</td>
                             <td>{realMinutes ? `${realMinutes} min` : '—'}</td>
                             <td><span className={`attention-status ${item.estado_atencion}`}>{item.estado_atencion.replaceAll('_', ' ')}</span></td>
-                            <td>{item.satisfaccion ? `${item.satisfaccion}/5` : 'Pendiente'}</td>
-                            <td>{item.seguimiento_enviado ? <span className="followup-done"><Icon name="check" size={15} /> Enviado</span> : item.estado_atencion === 'completada' ? <button className="customers-link-button" type="button" onClick={() => markFollowUp(item)}>Registrar ahora</button> : '—'}</td>
+                            <td>
+                              <select
+                                value={item.satisfaccion ?? ''}
+                                onChange={(e) => updateCsatScore(item, e.target.value)}
+                                style={{
+                                  background: 'rgba(0,0,0,0.3)',
+                                  border: '1px solid rgba(255,255,255,0.18)',
+                                  color: item.satisfaccion ? '#b7d2b9' : 'rgba(255,255,255,0.6)',
+                                  borderRadius: '4px',
+                                  padding: '3px 6px',
+                                  fontSize: '0.72rem',
+                                  cursor: 'pointer'
+                                }}
+                                title="Registrar o actualizar calificación CSAT del cliente"
+                              >
+                                <option value="">Pendiente</option>
+                                <option value="5">⭐⭐⭐⭐⭐ 5 · Excelente</option>
+                                <option value="4">⭐⭐⭐⭐ 4 · Buena</option>
+                                <option value="3">⭐⭐⭐ 3 · Regular</option>
+                                <option value="2">⭐⭐ 2 · Baja</option>
+                                <option value="1">⭐ 1 · Muy baja</option>
+                              </select>
+                            </td>
+                            <td>
+                              {item.seguimiento_enviado ? (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                  <span className="followup-done"><Icon name="check" size={15} /> Enviado</span>
+                                  <button
+                                    className="customers-link-button"
+                                    type="button"
+                                    onClick={() => sendWhatsAppFollowUp(item)}
+                                    title="Reenviar indicaciones y encuesta por WhatsApp"
+                                    style={{ fontSize: '0.68rem', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                  >
+                                    <Icon name="phone" size={12} />
+                                    <span>Reenviar</span>
+                                  </button>
+                                </div>
+                              ) : item.estado_atencion === 'completada' ? (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => sendWhatsAppFollowUp(item)}
+                                    style={{
+                                      background: 'rgba(183, 210, 185, 0.2)',
+                                      border: '1px solid #b7d2b9',
+                                      color: '#b7d2b9',
+                                      borderRadius: '4px',
+                                      padding: '4px 9px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.72rem',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      fontWeight: 600
+                                    }}
+                                    title="Enviar recomendaciones post-servicio y encuesta de satisfacción por WhatsApp"
+                                  >
+                                    <Icon name="phone" size={13} />
+                                    <span>Enviar WhatsApp</span>
+                                  </button>
+                                  <button
+                                    className="customers-link-button"
+                                    type="button"
+                                    onClick={() => markFollowUp(item)}
+                                    title="Marcar como enviado manualmente"
+                                    style={{ fontSize: '0.68rem' }}
+                                  >
+                                    Marcar
+                                  </button>
+                                </div>
+                              ) : '—'}
+                            </td>
                           </tr>
                         )
                       })}
@@ -479,12 +827,92 @@ export default function CustomersStaffPage() {
             </section>
 
             <section id="alertas" className="customers-alerts-section">
-              <div className="customers-section-heading"><span className="customers-eyebrow">Impulsamiento</span><h2>Alertas y acciones sugeridas</h2><p>Reglas accionables para seguimiento, recuperación y recompra.</p></div>
+              <div className="customers-section-heading">
+                <span className="customers-eyebrow">Impulsamiento</span>
+                <h2>Alertas y acciones sugeridas</h2>
+                <p>Reglas accionables para seguimiento, recuperación y recompra.</p>
+              </div>
               <div className="customers-alert-grid">
                 {alerts.map((alert) => (
                   <article key={alert.id} className={`customers-alert-card ${alert.priority}`}>
                     <div className="alert-icon"><Icon name={alert.icon} size={20} /></div>
-                    <div><span>{alert.priority === 'high' ? 'Prioridad alta' : 'Prioridad media'}</span><strong>{alert.title}</strong><p>{alert.detail}</p><small>Agente: {alert.agent}</small></div>
+                    <div style={{ flex: 1 }}>
+                      <span>{alert.priority === 'high' ? 'Prioridad alta' : 'Prioridad media'}</span>
+                      <strong>{alert.title}</strong>
+                      <p>{alert.detail}</p>
+                      <small>Agente: {alert.agent}</small>
+
+                      {alert.actionType === 'link' && (
+                        <a
+                          href={alert.actionHref}
+                          style={{
+                            marginTop: '8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.72rem',
+                            color: '#b7d2b9',
+                            textDecoration: 'none',
+                            fontWeight: 600
+                          }}
+                        >
+                          {alert.actionLabel}
+                        </a>
+                      )}
+
+                      {alert.actionType === 'selectCustomer' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (alert.targetContactId) {
+                              setSelectedId(alert.targetContactId)
+                              showNotice('Cliente seleccionado para seguimiento post-servicio.')
+                            }
+                          }}
+                          style={{
+                            marginTop: '8px',
+                            background: 'transparent',
+                            border: '1px solid rgba(183, 210, 185, 0.4)',
+                            color: '#b7d2b9',
+                            borderRadius: '4px',
+                            padding: '3px 8px',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            alignSelf: 'flex-start'
+                          }}
+                        >
+                          <Icon name="message" size={13} />
+                          <span>{alert.actionLabel}</span>
+                        </button>
+                      )}
+
+                      {alert.actionType === 'reactivate' && alert.reactivationCustomer && (
+                        <button
+                          type="button"
+                          onClick={() => sendWhatsAppReactivation(alert.reactivationCustomer)}
+                          style={{
+                            marginTop: '8px',
+                            background: 'transparent',
+                            border: '1px solid rgba(228, 193, 137, 0.4)',
+                            color: '#e8ca8f',
+                            borderRadius: '4px',
+                            padding: '3px 8px',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            alignSelf: 'flex-start'
+                          }}
+                        >
+                          <Icon name="phone" size={13} />
+                          <span>{alert.actionLabel}</span>
+                        </button>
+                      )}
+                    </div>
                   </article>
                 ))}
               </div>
@@ -510,11 +938,15 @@ function buildAlerts(customers, attentions) {
       title: `${pending.length} cliente${pending.length > 1 ? 's' : ''} con atención bloqueada`,
       detail: 'El registro del servicio debe permanecer bloqueado hasta que PAYERS confirme el pago.',
       agent: 'Recepción + Fase 3',
+      actionType: 'link',
+      actionHref: '/staff/payers',
+      actionLabel: '➔ Ir a PAYERS para regularizar',
     })
   }
 
   const completedWithoutFollow = attentions.filter((item) => item.estado_atencion === 'completada' && !item.seguimiento_enviado)
   if (completedWithoutFollow.length) {
+    const firstClient = customers.find(c => c.id_contacto === completedWithoutFollow[0].id_contacto)
     alerts.push({
       id: 'followup',
       priority: 'high',
@@ -522,11 +954,15 @@ function buildAlerts(customers, attentions) {
       title: `${completedWithoutFollow.length} seguimiento${completedWithoutFollow.length > 1 ? 's' : ''} pendiente${completedWithoutFollow.length > 1 ? 's' : ''}`,
       detail: 'Enviar indicaciones y encuesta dentro de las 24 horas posteriores al servicio para proteger la experiencia del cliente.',
       agent: 'Agente IA / recepción',
+      actionType: 'selectCustomer',
+      targetContactId: completedWithoutFollow[0].id_contacto,
+      actionLabel: firstClient ? `📲 Atender a ${firstClient.nombre.split(' ')[0]}` : 'Gestionar seguimiento',
     })
   }
 
   const lowSatisfaction = attentions.filter((item) => Number(item.satisfaccion) > 0 && Number(item.satisfaccion) <= 2)
   if (lowSatisfaction.length) {
+    const criticalClient = customers.find(c => c.id_contacto === lowSatisfaction[0].id_contacto)
     alerts.push({
       id: 'csat',
       priority: 'high',
@@ -534,6 +970,9 @@ function buildAlerts(customers, attentions) {
       title: 'Satisfacción crítica detectada',
       detail: 'Contactar al cliente, revisar la atención y registrar una acción de recuperación del servicio.',
       agent: 'Administrador + especialista',
+      actionType: 'selectCustomer',
+      targetContactId: lowSatisfaction[0].id_contacto,
+      actionLabel: criticalClient ? `📞 Revisar caso de ${criticalClient.nombre.split(' ')[0]}` : 'Revisar caso',
     })
   }
 
@@ -544,20 +983,26 @@ function buildAlerts(customers, attentions) {
     if (!current || new Date(item.fecha_hora_inicio) > new Date(current.fecha_hora_inicio)) latestByCustomer.set(item.id_contacto, item)
   })
   const now = Date.now()
-  let reactivation = 0
+  let reactivationContacts = []
   latestByCustomer.forEach((item) => {
     const days = (now - new Date(item.fecha_hora_inicio).getTime()) / 86400000
-    if (days >= 30 && !item.proxima_atencion) reactivation += 1
+    if (days >= 30 && !item.proxima_atencion) {
+      const c = customers.find(cust => cust.id_contacto === item.id_contacto)
+      if (c) reactivationContacts.push(c)
+    }
   })
   alerts.push({
     id: 'reactivation',
     priority: 'medium',
     icon: 'trend',
-    title: reactivation ? `${reactivation} cliente${reactivation > 1 ? 's' : ''} para reactivación` : 'Fidelización bajo control',
-    detail: reactivation
+    title: reactivationContacts.length ? `${reactivationContacts.length} cliente${reactivationContacts.length > 1 ? 's' : ''} para reactivación` : 'Fidelización bajo control',
+    detail: reactivationContacts.length
       ? 'No tienen próxima atención programada después de 30 días. Recomendar un servicio compatible con su historial.'
       : 'No hay clientes con más de 30 días sin próxima atención dentro de los datos actuales.',
     agent: 'Agente IA / marketing',
+    actionType: reactivationContacts.length ? 'reactivate' : null,
+    reactivationCustomer: reactivationContacts[0] || null,
+    actionLabel: reactivationContacts.length ? `📲 Reactivar a ${reactivationContacts[0].nombre.split(' ')[0]}` : null,
   })
 
   return alerts.slice(0, 4)

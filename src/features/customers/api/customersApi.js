@@ -12,6 +12,14 @@ const DEMO_CONTACTS = [
     estado_pago: 'Pago confirmado',
     fecha_pago: '2026-09-17',
     servicio_contratado: 'Facial Hidratante',
+    fecha_cita: 'Hoy · 16:00 hrs',
+    duracion_estimada: '60 min',
+    especialista_asignado: 'María López',
+    preferencias: {
+      aroma: 'Lavanda y eucalipto',
+      musica: 'Suave instrumental',
+      sensibilidad: 'Piel reactiva y sensible'
+    }
   },
   {
     id_contacto: 126,
@@ -21,6 +29,14 @@ const DEMO_CONTACTS = [
     estado_pago: 'Pago pendiente',
     fecha_pago: null,
     servicio_contratado: 'Masaje Relajante',
+    fecha_cita: 'Pendiente de pago online',
+    duracion_estimada: '90 min',
+    especialista_asignado: 'Carlos Vega',
+    preferencias: {
+      aroma: 'Cítricos suaves',
+      musica: 'Silencio total',
+      sensibilidad: 'Sin sensibilidad'
+    }
   },
   {
     id_contacto: 127,
@@ -30,6 +46,14 @@ const DEMO_CONTACTS = [
     estado_pago: 'Pago confirmado',
     fecha_pago: '2026-09-16',
     servicio_contratado: 'Paquete Bienestar Total',
+    fecha_cita: 'Ayer · 17:30 hrs',
+    duracion_estimada: '90 min',
+    especialista_asignado: 'Lucía Fernández',
+    preferencias: {
+      aroma: 'Vainilla y manzanilla',
+      musica: 'Frecuencias binaurales',
+      sensibilidad: 'Normal'
+    }
   },
 ]
 
@@ -118,10 +142,15 @@ function toCustomer(row) {
   const pagoDet = Array.isArray(row.pago_detalle) ? row.pago_detalle[0] : row.pago_detalle
   const pagoSimArray = Array.isArray(row.pago_simulado) ? row.pago_simulado : [row.pago_simulado].filter(Boolean)
   const pagoSim = pagoSimArray.find(p => p?.estado_pago === 'completado') || pagoSimArray[0]
+  const leadDet = Array.isArray(row.lead_detalle) ? row.lead_detalle[0] : row.lead_detalle
+  const enriq = Array.isArray(row.enriquecimiento_contacto) ? row.enriquecimiento_contacto[0] : row.enriquecimiento_contacto
 
   const estado = pagoDet?.estado_pago || (pagoSim?.estado_pago === 'completado' ? 'confirmado' : null)
   const fecha = pagoDet?.fecha_pago || pagoSim?.fecha_completado || null
-  const servicio = pagoDet?.servicio_contratado || pagoSim?.servicio_contratado || 'Servicio spa'
+  const servicio = pagoDet?.servicio_contratado || pagoSim?.servicio_contratado || leadDet?.datos_propuesta?.nombre || 'Facial Hidratante'
+  const fechaCita = leadDet?.datos_propuesta?.fechaAtencion || (fecha ? `Programada: ${fecha}` : 'Hoy · 16:00 hrs')
+  const duracion = leadDet?.datos_propuesta?.duracion || '60 min'
+  const especialista = leadDet?.datos_propuesta?.especialista || 'María López'
 
   return {
     id_contacto: row.id_contacto,
@@ -131,6 +160,14 @@ function toCustomer(row) {
     estado_pago: estado ?? 'Sin pago registrado',
     fecha_pago: fecha,
     servicio_contratado: servicio,
+    fecha_cita: fechaCita,
+    duracion_estimada: duracion,
+    especialista_asignado: especialista,
+    preferencias: {
+      aroma: enriq?.preferencia_aroma || 'Lavanda relajante',
+      musica: enriq?.preferencia_musica || 'Instrumental suave',
+      sensibilidad: enriq?.sensibilidad_piel || 'Piel normal a sensible'
+    }
   }
 }
 
@@ -147,7 +184,7 @@ export async function listCustomersForAttention() {
   try {
     const { data, error } = await supabase
       .from('contacto')
-      .select('id_contacto,nombre,telefono,email,pago_detalle(estado_pago,fecha_pago,servicio_contratado),pago_simulado(estado_pago,fecha_completado,servicio_contratado,monto_total)')
+      .select('id_contacto,nombre,telefono,email,lead_detalle(lead_score,datos_propuesta,fecha_aceptacion),pago_detalle(estado_pago,fecha_pago,servicio_contratado),pago_simulado(estado_pago,fecha_completado,servicio_contratado,monto_total),enriquecimiento_contacto(sensibilidad_piel,preferencia_aroma,preferencia_musica)')
       .order('id_contacto', { ascending: false })
       .limit(100)
 

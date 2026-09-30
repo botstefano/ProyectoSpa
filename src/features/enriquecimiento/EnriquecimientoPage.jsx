@@ -54,6 +54,7 @@ export default function EnriquecimientoPage() {
   const [formData, setFormData] = useState(ENRIQUECIMIENTO_FIELDS)
   const [submitting, setSubmitting] = useState(false)
   const [progreso, setProgreso] = useState(0)
+  const [idContacto, setIdContacto] = useState(null)
 
   useEffect(() => {
     async function validarToken() {
@@ -87,6 +88,10 @@ export default function EnriquecimientoPage() {
           setLoading(false)
           logger.info('enriquecimiento', 'Modo demo activo para token', { token })
           return
+        }
+
+        if (result.id_contacto) {
+          setIdContacto(result.id_contacto)
         }
 
         // Verificar si ya está completado
@@ -150,6 +155,31 @@ export default function EnriquecimientoPage() {
         .eq('token_enriquecimiento', token)
 
       if (error) throw error
+
+      // Bonificación automática de Lead Score al completar enriquecimiento (+25 pts)
+      if (idContacto) {
+        try {
+          const { data: leadDet } = await client
+            .from('lead_detalle')
+            .select('lead_score')
+            .eq('id_contacto', idContacto)
+            .single()
+
+          const scoreActual = leadDet?.lead_score || 35
+          // Un lead con perfil enriquecido pasa a rango 65 - 80 (Tibio alto / Caliente)
+          const nuevoScore = Math.min(85, Math.max(scoreActual + 25, 65))
+          await client
+            .from('lead_detalle')
+            .upsert({
+              id_contacto: idContacto,
+              lead_score: nuevoScore,
+              fecha_calificacion: new Date().toISOString()
+            })
+          logger.info('enriquecimiento', `Lead score actualizado a ${nuevoScore} tras enriquecimiento`)
+        } catch (scoreErr) {
+          logger.warn('enriquecimiento', 'Aviso actualizando score tras enriquecimiento', { scoreErr })
+        }
+      }
 
       logger.info('enriquecimiento', 'Formulario completado exitosamente')
       setSuccess(true)

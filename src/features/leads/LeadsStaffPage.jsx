@@ -91,6 +91,16 @@ export default function LeadsStaffPage() {
   const [nuevaPrioridadActividad, setNuevaPrioridadActividad] = useState("Media");
   const [filtroActividad, setFiltroActividad] = useState("Pendientes");
 
+  // Automatizaciones de Campaña de Propuestas por Correo (Configuradas dinámicamente por IA)
+  const [analyzingAutomation, setAnalyzingAutomation] = useState(false);
+  const [automatizacionCorreoMap, setAutomatizacionCorreoMap] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('crm_automatizaciones_correo') || '{}');
+    } catch (_) {
+      return {};
+    }
+  });
+
   function show(msg) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
   useEffect(() => {
@@ -210,7 +220,15 @@ export default function LeadsStaffPage() {
 
         const finalLeads = leadsMapeados.length > 0 ? leadsMapeados : MOCK_LEADS;
         setLeads(finalLeads);
-        if (finalLeads.length > 0) setSelId(finalLeads[0].id);
+        
+        const params = new URLSearchParams(window.location.search);
+        const targetId = params.get('cliente') || params.get('recompra');
+        if (targetId) {
+          const match = finalLeads.find(l => String(l.id) === String(targetId) || String(l.id_contacto) === String(targetId));
+          setSelId(match ? match.id : (finalLeads[0]?.id || 1));
+        } else if (finalLeads.length > 0) {
+          setSelId(finalLeads[0].id);
+        }
       } catch (err) {
         console.warn('[Leads] Sin conexión a BD, usando datos demo:', err?.message || err);
         const DEMO = [
@@ -278,18 +296,34 @@ export default function LeadsStaffPage() {
         email: lead.perfil?.email,
         telefono: lead.perfil?.telefono,
         interes: lead.interes?.toLowerCase() || 'facial',
-        tipoPiel: 'no_se', // No tenemos este dato directo
+        tipoPiel: lead.gustos?.tipoPiel || 'no_se',
         fecha_registro: lead.otros?.fechaRegistro
       };
+
+      const datosEnriquecimiento = {
+        completado: Boolean(lead.otros?.enriquecimientoCompletado),
+        presupuesto: lead.otros?.observaciones,
+        frecuencia_deseada: lead.otros?.observaciones,
+        preferencia_aroma: lead.gustos?.aroma,
+        preferencia_musica: lead.gustos?.musica,
+        preferencia_temperatura: lead.gustos?.temperatura,
+        motivo_principal: lead.otros?.observaciones
+      };
+
+      const datosPropuesta = {
+        aceptada: Boolean(lead.propuesta?.aceptada),
+        estado: lead.propuesta?.aceptada ? 'aceptada' : (lead.propuesta ? 'enviada' : 'ninguna'),
+        enviada: Boolean(lead.propuesta?.nombre)
+      };
       
-      const result = await calificarLeadAutomatico(lead.id, datosContacto);
+      const result = await calificarLeadAutomatico(lead.id, datosContacto, datosEnriquecimiento, datosPropuesta);
       
       if (result.success) {
         const newScore = result.data?.score || 50;
         setLeads(prev => prev.map(l => 
           l.id === lead.id ? { ...l, score: newScore, temp: calcularTemperatura(newScore) } : l
         ));
-        show(`✅ Lead Score calculado automáticamente: ${newScore}/100`);
+        show(`✅ Lead Score unificado (Buyers + Enriquecimiento + Propuesta): ${newScore}/100`);
       } else {
         show(result.error?.message || "Error en calificación automática");
       }
@@ -550,33 +584,265 @@ export default function LeadsStaffPage() {
     show("Actividad eliminada");
   };
 
-  const handleAutomatizarSeguimiento = () => {
-    if (!lead) return;
+  // Helper: Determina de forma inteligente el horario y ambiente óptimo según el perfil del lead
+  const obtenerHorarioYAmbienteIA = (currentLead) => {
+    if (!currentLead) return { horario: '18:30 hrs', explicacionHorario: 'Horario post-jornada laboral', ambiente: 'Lavanda Silvestre & Luz Ámbar' };
+
+    let horario = '18:30 hrs';
+    let explicacionHorario = 'Horario post-jornada laboral';
+
+    const horarioPref = (currentLead.gustos?.horario || '').toLowerCase();
+    const situacion = (currentLead.laboral?.situacion || currentLead.laboral?.cargo || currentLead.estudiante?.nivel || '').toLowerCase();
+
+    if (horarioPref.includes('fin') || horarioPref.includes('sabado') || horarioPref.includes('domingo') || horarioPref.includes('9-12') || horarioPref.includes('manana')) {
+      horario = '10:00 hrs';
+      explicacionHorario = 'Franja matutina de fin de semana (según disponibilidad)';
+    } else if (horarioPref.includes('tarde') || situacion.includes('gerente') || situacion.includes('ejecutiv') || situacion.includes('banco') || situacion.includes('empresa')) {
+      horario = '18:30 hrs';
+      explicacionHorario = 'Tarde post-oficina para descarga de estrés y contracturas';
+    } else if (situacion.includes('freelance') || situacion.includes('independiente')) {
+      horario = '16:00 hrs';
+      explicacionHorario = 'Media tarde (mayor calma y privacidad en cabina)';
+    } else if (situacion.includes('estudiante') || situacion.includes('universit')) {
+      horario = '11:30 hrs';
+      explicacionHorario = 'Mediodía flexible entre actividades académicas';
+    }
+
+    const aroma = currentLead.gustos?.aroma || 'Lavanda relajante';
+    const musica = currentLead.gustos?.musica || 'Sonidos de la naturaleza & cuencos tibetanos';
+    const temp = currentLead.gustos?.temperatura || 'Cálida envolvente';
+    const ambiente = `Aroma: ${aroma} · Música: ${musica} · Temp: ${temp} · Luz tenue cálida`;
+
+    return {
+      horario,
+      explicacionHorario,
+      aroma,
+      musica,
+      temperatura: temp,
+      ambiente
+    };
+  };
+
+  // Helper: Genera dinámicamente las razones por las que una propuesta es ideal para este lead
+  const calcularRazonesDinamicas = (currentLead, currentPropuesta) => {
+    if (!currentLead) return [];
+    const razones = [];
+    const interes = (currentLead.interes || currentLead.servicio || 'bienestar').toLowerCase();
+    const nombreLead = currentLead.nombre ? currentLead.nombre.split(' ')[0] : 'el cliente';
+    const gustos = currentLead.gustos || {};
+    const perfil = currentLead.perfil || {};
+    const otros = currentLead.otros || {};
+    const laboral = currentLead.laboral || {};
+    const observaciones = (otros.observaciones || currentLead.frase || '').toLowerCase();
+
+    // 1. Motivo de consulta o necesidad corporal/facial específica
+    if (observaciones.includes('estres') || observaciones.includes('desestresar') || observaciones.includes('cansancio') || observaciones.includes('largas semanas')) {
+      razones.push(`Protocolo anti-estrés diseñado para contrarrestar la fatiga y carga laboral de ${nombreLead}.`);
+    } else if (observaciones.includes('contractura') || observaciones.includes('dolor') || observaciones.includes('lumbar') || observaciones.includes('cervical')) {
+      razones.push(`Terapia focalizada en contracturas y tensión muscular en cuello y zona lumbar.`);
+    } else if (interes.includes('facial') || gustos.tipoPiel) {
+      const piel = gustos.tipoPiel ? `para piel ${gustos.tipoPiel.toLowerCase()}` : 'con diagnóstico dérmico';
+      razones.push(`Tratamiento facial no invasivo formulado ${piel}, aportando nutrición y luminosidad profunda.`);
+    } else if (observaciones.includes('reunion') || observaciones.includes('evento') || observaciones.includes('ocasion')) {
+      razones.push(`Renovación inmediata pensada para lucir radiante en su próxima ocasión especial.`);
+    } else {
+      razones.push(`Diseñado a la medida de su interés inicial en ${currentLead.interes || 'bienestar integral'}.`);
+    }
+
+    // 2. Personalización sensorial (Aroma, música, temperatura)
+    if (gustos.aroma && gustos.musica) {
+      razones.push(`Aromaterapia de ${gustos.aroma} y armonización sonora con ${gustos.musica.toLowerCase()} para inducir desconexión total.`);
+    } else if (gustos.aroma) {
+      razones.push(`Incorpora aceites esenciales de ${gustos.aroma}, seleccionados según sus gustos olfativos.`);
+    } else if (gustos.temperatura) {
+      razones.push(`Ambiente térmico con toallas y cabina templadas a temperatura ${gustos.temperatura.toLowerCase()}.`);
+    } else {
+      razones.push(`Cabina climatizada con luz tenue y esencias botánicas para máxima privacidad.`);
+    }
+
+    // 3. Situación laboral o ritmo diario
+    if (gustos.horario) {
+      razones.push(`Horario adaptable a su disponibilidad declarada (${gustos.horario}).`);
+    } else if (laboral.cargo || laboral.empresa) {
+      razones.push(`Ideal para ejecutivas y profesionales (${laboral.cargo || 'ritmo activo'}) que buscan un respiro sin perder tiempo.`);
+    } else if (perfil.distrito) {
+      razones.push(`Ubicación de fácil acceso para citas coordinadas desde ${perfil.distrito}.`);
+    }
+
+    // 4. Beneficio de la propuesta y valor comercial
+    if (currentPropuesta?.descuento && currentPropuesta?.descuento !== '0%') {
+      razones.push(`Tarifa preferencial de bienvenida con ${currentPropuesta.descuento} de beneficio (${currentPropuesta.precioEspecial || currentPropuesta.precio}).`);
+    } else if (currentLead.score >= 70) {
+      razones.push(`Lead de alta prioridad (Score ${currentLead.score}/100) con seguimiento personalizado incluido.`);
+    }
+
+    return razones.slice(0, 3);
+  };
+
+  // Determina con IA la estrategia completa de campaña: cadencia (días), horario y ambiente
+  const analizarEstrategiaAutomatizacionIA = (currentLead) => {
+    if (!currentLead) {
+      return {
+        cadenciaDias: 2,
+        cadenciaTexto: 'Cada 2 días',
+        motivoCadencia: 'Cadencia estándar de conversión',
+        horario: '18:30 hrs',
+        explicacionHorario: 'Horario post-jornada laboral',
+        ambiente: 'Lavanda Silvestre & Luz Ámbar'
+      };
+    }
+
+    const score = Number(currentLead.score) || 50;
+    const observaciones = ((currentLead.otros?.observaciones || '') + ' ' + (currentLead.frase || '')).toLowerCase();
+    const urgenciaAlta = observaciones.includes('dolor') || observaciones.includes('contractura') || observaciones.includes('urgente') || observaciones.includes('evento') || observaciones.includes('boda') || observaciones.includes('viaje');
+
+    // Cadencia determinada por IA según score y urgencia
+    let cadenciaDias = 3;
+    let cadenciaTexto = 'Cada 3 días';
+    let motivoCadencia = 'Interés moderado (Lead Tibio); cadencia equilibrada para no saturar';
+
+    if (score >= 75 || urgenciaAlta) {
+      cadenciaDias = 2;
+      cadenciaTexto = 'Cada 2 días';
+      motivoCadencia = `Lead de alta temperatura (Score ${score}/100)${urgenciaAlta ? ' con necesidad inmediata' : ''}; seguimiento dinámico prioritario`;
+    } else if (score < 45) {
+      cadenciaDias = 4;
+      cadenciaTexto = 'Cada 4 días';
+      motivoCadencia = `Lead en fase exploratoria (Score ${score}/100); secuencia espaciada de nutrición y valor`;
+    }
+
+    // Horario determinado por IA según hábitos y profesión
+    let horario = '18:30 hrs';
+    let explicacionHorario = 'Horario post-jornada laboral';
+
+    const horarioPref = (currentLead.gustos?.horario || '').toLowerCase();
+    const situacion = (currentLead.laboral?.situacion || currentLead.laboral?.cargo || currentLead.estudiante?.nivel || '').toLowerCase();
+
+    if (horarioPref.includes('fin') || horarioPref.includes('sabado') || horarioPref.includes('domingo') || horarioPref.includes('9-12') || horarioPref.includes('manana')) {
+      horario = '10:00 hrs';
+      explicacionHorario = 'Franja matutina de fin de semana (según disponibilidad)';
+    } else if (horarioPref.includes('tarde') || situacion.includes('gerente') || situacion.includes('ejecutiv') || situacion.includes('banco') || situacion.includes('empresa') || situacion.includes('oficina')) {
+      horario = '18:30 hrs';
+      explicacionHorario = 'Tarde post-oficina para descarga de estrés y contracturas';
+    } else if (situacion.includes('freelance') || situacion.includes('independiente') || situacion.includes('consultor')) {
+      horario = '16:00 hrs';
+      explicacionHorario = 'Media tarde con mayor calma y privacidad en cabina';
+    } else if (situacion.includes('estudiante') || situacion.includes('universit')) {
+      horario = '11:30 hrs';
+      explicacionHorario = 'Mediodía flexible entre actividades académicas';
+    }
+
+    // Ambiente sensorial
+    const aroma = currentLead.gustos?.aroma || 'Lavanda relajante';
+    const musica = currentLead.gustos?.musica || 'Sonidos de la naturaleza & cuencos tibetanos';
+    const temp = currentLead.gustos?.temperatura || 'Cálida envolvente';
+    const ambiente = `Aroma: ${aroma} · Música: ${musica} · Temp: ${temp} · Luz tenue cálida`;
+
+    return {
+      cadenciaDias,
+      cadenciaTexto,
+      motivoCadencia,
+      horario,
+      explicacionHorario,
+      aroma,
+      musica,
+      temperatura: temp,
+      ambiente
+    };
+  };
+
+  // --- AUTOMATIZACIÓN DE CAMPAÑA POR CORREO (DETERMINADA POR IA AL MOMENTO) ---
+  const handleToggleAutomatizacionCorreo = async () => {
+    if (!lead || analyzingAutomation) return;
+    const emailDestino = lead.perfil?.email;
+    if (!emailDestino) {
+      show("⚠️ El lead no tiene correo electrónico registrado para automatizar envíos");
+      return;
+    }
+
+    const estaActiva = Boolean(automatizacionCorreoMap[lead.id]?.activa);
+
+    if (estaActiva) {
+      // Pausar automatización
+      const updatedMap = {
+        ...automatizacionCorreoMap,
+        [lead.id]: { activa: false, fechaPausa: new Date().toISOString() }
+      };
+      setAutomatizacionCorreoMap(updatedMap);
+      try {
+        localStorage.setItem('crm_automatizaciones_correo', JSON.stringify(updatedMap));
+      } catch (_) {}
+
+      registrarEventoHistorial(lead.id, {
+        tipo: 'Email',
+        titulo: 'Campaña por correo pausada',
+        detalle: `Se pausó el envío automatizado de propuestas variadas por correo a ${emailDestino}.`,
+        autor: 'Agente de Campaña'
+      });
+
+      show("⏸️ Automatización de correos pausada");
+      return;
+    }
+
+    // Activar automatización: la IA determina la cadencia, horario y ambiente en este momento
+    setAnalyzingAutomation(true);
+    show(`🧠 Analizando perfil, hábitos y score de ${fn} con IA...`);
+
+    // Breve pausa para feedback visual del proceso de IA
+    await new Promise(r => setTimeout(r, 650));
+
+    const estrategia = analizarEstrategiaAutomatizacionIA(lead);
+
+    const nuevaConfig = {
+      activa: true,
+      cadenciaDias: estrategia.cadenciaDias,
+      cadenciaTexto: estrategia.cadenciaTexto,
+      motivoCadencia: estrategia.motivoCadencia,
+      horario: estrategia.horario,
+      explicacionHorario: estrategia.explicacionHorario,
+      ambiente: estrategia.ambiente,
+      email: emailDestino,
+      fechaInicio: new Date().toISOString(),
+      proximoEnvio: `En ${estrategia.cadenciaDias} días a las ${estrategia.horario}`
+    };
+
+    const updatedMap = {
+      ...automatizacionCorreoMap,
+      [lead.id]: nuevaConfig
+    };
+    setAutomatizacionCorreoMap(updatedMap);
+    try {
+      localStorage.setItem('crm_automatizaciones_correo', JSON.stringify(updatedMap));
+    } catch (_) {}
+
+    // Crear actividad programada en pestaña "Actividades"
     const nuevaActividad = {
-      id: `auto-${Date.now()}`,
-      titulo: `Seguimiento automatizado: Enviar recordatorio interactivo de propuesta para ${fn} vía WhatsApp`,
-      tipo: 'WhatsApp',
-      fechaProgramada: 'En 24 horas',
-      prioridad: 'Alta',
+      id: `auto-email-${Date.now()}`,
+      titulo: `Secuencia Correo (Día +${estrategia.cadenciaDias}): Enviar propuesta variada alternativa a ${emailDestino}`,
+      tipo: 'Email',
+      fechaProgramada: `En ${estrategia.cadenciaDias} días a las ${estrategia.horario}`,
+      prioridad: estrategia.cadenciaDias <= 2 ? 'Alta' : 'Media',
       completada: false,
       automatica: true
     };
-    
+
     const currentActs = actividadesMap[lead.id] || getLeadActividades(lead);
-    const updated = [nuevaActividad, ...currentActs];
-    setActividadesMap(prev => ({ ...prev, [lead.id]: updated }));
+    const updatedActs = [nuevaActividad, ...currentActs];
+    setActividadesMap(prev => ({ ...prev, [lead.id]: updatedActs }));
     try {
-      localStorage.setItem(`crm_actividades_${lead.id}`, JSON.stringify(updated));
+      localStorage.setItem(`crm_actividades_${lead.id}`, JSON.stringify(updatedActs));
     } catch (_) {}
 
+    // Registrar en Historial
     registrarEventoHistorial(lead.id, {
-      tipo: 'Sistema',
-      titulo: 'Seguimiento automatizado programado por Agente IA',
-      detalle: `Se programó tarea de seguimiento en 24h para contactar a ${fn} por WhatsApp con propuesta ${lead.propuesta?.nombre}.`,
-      autor: 'Agente IA'
+      tipo: 'Email',
+      titulo: `Campaña automatizada por correo activada (${estrategia.cadenciaTexto})`,
+      detalle: `La IA asignó envíos ${estrategia.cadenciaTexto} a las ${estrategia.horario}. Motivo: ${estrategia.motivoCadencia}. Ambiente: ${estrategia.ambiente}.`,
+      autor: 'Agente de Campaña IA'
     });
 
-    show("🤖 Seguimiento automatizado activado: Tarea creada en Actividades");
+    setAnalyzingAutomation(false);
+    show(`✨ Automatización activada: la IA fijó envíos ${estrategia.cadenciaTexto} a las ${estrategia.horario}`);
   };
 
   // --- GENERACIÓN DE PROPUESTAS (IA MISTRAL O CATÁLOGO RÁPIDO) ---
@@ -1459,7 +1725,6 @@ export default function LeadsStaffPage() {
               {/* Botonera inferior */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', borderTop: '1px solid var(--color-line)', paddingTop: '1.5rem' }}>
                 <div style={{ display: 'flex', gap: '0.8rem' }}>
-                  <button className="ln-btn-ghost" onClick={() => show("Creando nuevo lead...")}>+ Nuevo Lead</button>
                   {!lead.otros.enriquecimientoCompletado ? (
                     <button 
                       className="ln-btn-ghost" 
@@ -1586,22 +1851,33 @@ export default function LeadsStaffPage() {
                     </div>
                   </div>
 
-                  <div className="ln-prop-footer">
-                    <div className="ln-info-block">
+                  <div className="ln-prop-footer" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-line)' }}>
+                    <div className="ln-info-block" style={{ alignItems: 'flex-start' }}>
                       <IcoCal/>
                       <div>
-                        <strong>Fecha y horario sugerido</strong>
-                        <p>{lead.cita}</p>
-                        <button className="ln-link-btn" onClick={() => show("Cambiando fecha...")}>Cambiar</button>
+                        <strong style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--color-accent)' }}>
+                          <span>🕒 Horario sugerido por IA</span>
+                        </strong>
+                        <p style={{ margin: '0.25rem 0', fontWeight: '600', color: 'var(--color-ink)' }}>
+                          {lead.propuesta?.horarioSugerido || `${obtenerHorarioYAmbienteIA(lead).horario} (${obtenerHorarioYAmbienteIA(lead).explicacionHorario})`}
+                        </p>
+                        <small style={{ color: 'var(--color-ink-muted)', fontSize: '0.68rem' }}>
+                          Calculado según disponibilidad y ritmo de vida
+                        </small>
                       </div>
                     </div>
-                    <div className="ln-info-block">
+                    <div className="ln-info-block" style={{ alignItems: 'flex-start' }}>
                       <IcoHome/>
                       <div>
-                        <strong>Experiencia en Origen Spa</strong>
-                        <p>&#10003; Ambientes tranquilos y privados</p>
-                        <p>&#10003; Terapeutas certificadas</p>
-                        <p>&#10003; Música relajante</p>
+                        <strong style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--color-accent)' }}>
+                          <span>🕯️ Ambiente sensorial por IA</span>
+                        </strong>
+                        <p style={{ margin: '0.25rem 0', fontSize: '0.74rem', color: 'var(--color-ink)', lineHeight: 1.4 }}>
+                          {lead.propuesta?.ambienteSugerido || obtenerHorarioYAmbienteIA(lead).ambiente}
+                        </p>
+                        <small style={{ color: 'var(--color-ink-muted)', fontSize: '0.68rem' }}>
+                          Personalizado según aroma, música y piel declarados
+                        </small>
                       </div>
                     </div>
                   </div>
@@ -1669,26 +1945,108 @@ export default function LeadsStaffPage() {
 
               {/* Derecha */}
               <div className="ln-propuesta-right">
+                {/* Tarjeta dinámica adaptada al lead y sus gustos */}
                 <article className="ln-card">
-                  <h3 className="ln-card-title" style={{marginBottom:"0.7rem"}}>¿Por qué es ideal para {fn}?</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: "0.7rem" }}>
+                    <h3 className="ln-card-title" style={{ margin: 0 }}>¿Por qué es ideal para {fn}?</h3>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--color-accent)', background: 'rgba(200,155,92,0.1)', padding: '2px 7px', borderRadius: '10px' }}>
+                      Personalizado
+                    </span>
+                  </div>
                   <ul className="ln-porque">
-                    {lead.porQue.map((r,i) => (
+                    {calcularRazonesDinamicas(lead, lead.propuesta).map((r, i) => (
                       <li key={i}><IcoCheck/><span>{r}</span></li>
                     ))}
                   </ul>
                 </article>
 
-                <article className="ln-card" style={{marginTop:"0.7rem"}}>
-                  <h3 className="ln-card-title" style={{marginBottom:"0.55rem"}}>&#129302; Agente IA</h3>
-                  <p style={{fontSize:"0.72rem",color:"var(--color-ink-muted)",lineHeight:1.55}}>
-                    Se recomienda enviar la propuesta por WhatsApp y hacer seguimiento en 24 horas.
-                  </p>
+                {/* Agente de Campaña por Correo (Configuración determinada por IA al automatizar) */}
+                <article className="ln-card" style={{ marginTop: "0.7rem" }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: "0.55rem" }}>
+                    <h3 className="ln-card-title" style={{ margin: 0 }}>🤖 Campaña por Correo</h3>
+                    {automatizacionCorreoMap[lead.id]?.activa && (
+                      <span style={{ fontSize: '0.68rem', background: 'rgba(183,210,185,0.2)', color: '#b7d2b9', border: '1px solid rgba(183,210,185,0.4)', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
+                        ● Activo (Diseñado por IA)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Si ya está activa: muestra el diagnóstico y plan determinado por IA */}
+                  {automatizacionCorreoMap[lead.id]?.activa ? (
+                    <>
+                      <div style={{ background: 'rgba(243,238,226,0.03)', border: '1px solid var(--color-line)', borderRadius: '6px', padding: '0.65rem', marginBottom: '0.75rem', fontSize: '0.72rem' }}>
+                        {/* Cadencia */}
+                        <div style={{ marginBottom: '0.45rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                          <span style={{ color: 'var(--color-accent)' }}>📅</span>
+                          <div>
+                            <strong style={{ color: 'var(--color-ink)' }}>Cadencia por IA:</strong>
+                            <span style={{ marginLeft: '4px', color: 'var(--color-accent)', fontWeight: 600 }}>
+                              {automatizacionCorreoMap[lead.id].cadenciaTexto}
+                            </span>
+                            <div style={{ color: 'var(--color-ink-muted)', fontSize: '0.68rem', marginTop: '1px' }}>
+                              {automatizacionCorreoMap[lead.id].motivoCadencia}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Horario */}
+                        <div style={{ marginBottom: '0.45rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                          <span style={{ color: 'var(--color-accent)' }}>🕒</span>
+                          <div>
+                            <strong style={{ color: 'var(--color-ink)' }}>Horario sugerido por IA:</strong>
+                            <span style={{ marginLeft: '4px', color: 'var(--color-accent)', fontWeight: 600 }}>
+                              {automatizacionCorreoMap[lead.id].horario}
+                            </span>
+                            <div style={{ color: 'var(--color-ink-muted)', fontSize: '0.68rem', marginTop: '1px' }}>
+                              {automatizacionCorreoMap[lead.id].explicacionHorario}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ambiente */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                          <span style={{ color: 'var(--color-accent)' }}>🕯️</span>
+                          <div>
+                            <strong style={{ color: 'var(--color-ink)' }}>Ambiente sensorial por IA:</strong>
+                            <div style={{ color: 'var(--color-ink-muted)', fontSize: '0.68rem', marginTop: '2px', lineHeight: 1.4 }}>
+                              {automatizacionCorreoMap[lead.id].ambiente}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p style={{ fontSize: "0.72rem", color: "#b7d2b9", lineHeight: 1.5, marginBottom: "0.75rem" }}>
+                        Secuencia activa: enviando propuestas variadas <strong>{automatizacionCorreoMap[lead.id].cadenciaTexto.toLowerCase()}</strong> a <strong>{automatizacionCorreoMap[lead.id].email}</strong> a las {automatizacionCorreoMap[lead.id].horario}.
+                      </p>
+                    </>
+                  ) : (
+                    /* Si NO está activa: explicación limpia sin fijar parámetros antes de tiempo */
+                    <p style={{ fontSize: "0.72rem", color: "var(--color-ink-muted)", lineHeight: 1.55, marginBottom: "0.85rem" }}>
+                      Al hacer clic en automatizar, la IA evaluará el perfil, score (temperatura) y hábitos de <strong>{fn}</strong> para determinar la <strong>frecuencia ideal en días</strong>, la <strong>hora de mayor apertura</strong> y la <strong>ambientación de cabina</strong> para enviarle propuestas variadas por correo electrónico a {lead.perfil?.email || 'su correo'}.
+                    </p>
+                  )}
+
                   <button 
-                    className="ln-btn-primary" 
-                    style={{marginTop:"0.75rem",width:"100%",fontSize:"0.72rem",justifyContent:"center"}}
-                    onClick={handleAutomatizarSeguimiento}
+                    className={automatizacionCorreoMap[lead.id]?.activa ? "ln-btn-ghost" : "ln-btn-primary"}
+                    style={{
+                      width: "100%",
+                      fontSize: "0.74rem",
+                      justifyContent: "center",
+                      padding: '0.6rem',
+                      opacity: analyzingAutomation ? 0.7 : 1,
+                      cursor: analyzingAutomation ? 'wait' : 'pointer',
+                      ...(automatizacionCorreoMap[lead.id]?.activa ? { border: '1px solid rgba(217,175,160,0.5)', color: '#D9AFA0' } : {})
+                    }}
+                    onClick={handleToggleAutomatizacionCorreo}
+                    disabled={analyzingAutomation}
                   >
-                    <IcoSend/> Automatizar
+                    {analyzingAutomation ? (
+                      <>✨ Analizando perfil y hábitos con IA...</>
+                    ) : automatizacionCorreoMap[lead.id]?.activa ? (
+                      <>⏸️ Pausar Automatización</>
+                    ) : (
+                      <><IcoSend/> Automatizar con IA (Determinar Cadencia y Hora)</>
+                    )}
                   </button>
                 </article>
               </div>

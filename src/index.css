@@ -1151,11 +1151,11 @@ button {
 }
 
 .payers-top-grid {
-  grid-template-columns: 0.82fr 1.18fr;
+  grid-template-columns: 1fr 1fr;
 }
 
 .payers-main-grid {
-  grid-template-columns: 1.36fr 0.64fr;
+  grid-template-columns: 1fr 1fr;
   align-items: start;
   margin-top: 1rem;
 }

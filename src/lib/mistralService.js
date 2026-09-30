@@ -881,12 +881,24 @@ function generarPropuestaInteligenteLocal(leadData = {}) {
     ]
   }
 
+  // Deducción inteligente de horario y ambiente
+  let horarioDeducido = '18:30 hrs (Post-jornada laboral)';
+  if (horario.toLowerCase().includes('fin') || horario.toLowerCase().includes('sabado') || horario.toLowerCase().includes('manana')) {
+    horarioDeducido = '10:00 hrs (Franja matutina relajada)';
+  } else if (horario.toLowerCase().includes('tarde')) {
+    horarioDeducido = '18:30 hrs (Horario recomendado para desconexión post-oficina)';
+  }
+
+  const ambienteDeducido = `Aromaterapia de ${aroma} · Música ambiental de ${musica.toLowerCase()} · Cabina templada a temperatura ${temperatura.toLowerCase()} · Luz tenue cálida`;
+
   return {
     success: true,
     iaGenerada: false,
     motor: 'Asistente Experto Origen Spa',
     propuesta: {
       ...propuesta,
+      horarioSugerido: horarioDeducido,
+      ambienteSugerido: ambienteDeducido,
       aceptada: false,
       fecha_aceptacion: null
     },
@@ -920,12 +932,12 @@ export async function generarPropuestaConMistral(leadData = {}, apiKey = null) {
   if (isRealMistralKey(keyToUse) && Date.now() >= mistralCooldownUntil) {
     try {
       const systemPrompt = `Eres el especialista senior en diseño de experiencias y tratamientos de Origen Spa en Trujillo, Perú.
-Tu tarea es diseñar una propuesta de tratamiento spa irresistible, altamente personalizada y profesional para un cliente, basada estrictamente en los datos recopilados sobre sus gustos, piel y necesidades.
+Tu tarea es diseñar una propuesta de tratamiento spa irresistible, altamente personalizada y profesional para un cliente, determinando también el horario idóneo y el ambiente sensorial según sus gustos, piel y necesidades.
 
 REGLAS OBLIGATORIAS:
 1. Responde EXCLUSIVAMENTE con un JSON válido. No uses bloques markdown, no uses backticks (\`\`\`json), no agregues comentarios ni texto antes o después.
 2. Precios en Soles peruanos (S/). Precio regular entre 150 y 240. Precio especial con descuento promocional de entre 18% y 25%.
-3. Integra directamente sus preferencias sensoriales: aroma (${aroma}), música (${musica}), tipo de piel (${tipoPiel}) y temperatura de agua (${temperatura}).
+3. Determina con precisión el horario idóneo y el ambiente multisensorial (aroma, música, temperatura, luz).
 4. El formato del JSON debe ser exactamente:
 {
   "nombre": "string con el nombre creativo y exclusivo del paquete",
@@ -937,6 +949,8 @@ REGLAS OBLIGATORIAS:
   "ahorro": "S/ 45.00",
   "descuento": "24%",
   "incluye": "string detallando evaluación, insumos orgánicos, aparatología o técnicas y beneficios incluidos",
+  "horarioSugerido": "string con hora sugerida y breve motivo (ej: '18:30 hrs (Ideal para descarga de estrés post-oficina)')",
+  "ambienteSugerido": "string con aroma, música, luz y temperatura ideal para su sesión",
   "porQue": [
     "Razón 1 destacando cómo beneficia su piel (${tipoPiel}) o motivo de consulta",
     "Razón 2 destacando la personalización sensorial con ${aroma} y ambiente con ${musica}",
@@ -1009,6 +1023,8 @@ REGLAS OBLIGATORIAS:
                 ahorro: parsed.ahorro || 'S/ 40.00',
                 descuento: parsed.descuento || '22%',
                 incluye: parsed.incluye || 'Protocolo completo personalizado y seguimiento.',
+                horarioSugerido: parsed.horarioSugerido || `${horario !== 'Horario flexible' ? horario : '18:30 hrs'} (Optimizado por IA)`,
+                ambienteSugerido: parsed.ambienteSugerido || `Aroma a ${aroma}, música de ${musica.toLowerCase()} y cabina climatizada`,
                 aceptada: false,
                 fecha_aceptacion: null
               },

@@ -113,37 +113,87 @@ async function transicionarBuyerALead(idContacto) {
 }
 
 /**
- * Calcula lead score automáticamente basado en múltiples factores
+ * Calcula lead score automáticamente unificando:
+ * 1. Formulario inicial (Buyers / Landing) -> hasta 35 pts
+ * 2. Formulario de Enriquecimiento (Perfil profundo y gustos) -> hasta 35 pts
+ * 3. Ciclo de vida de la Propuesta (Enviada, Aceptada o Rechazada) -> hasta 30 pts
  */
-function calcularLeadScoreAutomatico(contacto) {
+export function calcularLeadScoreAutomatico(contacto = {}, enriquecimiento = {}, propuesta = {}) {
+  // Si la propuesta fue rechazada explícitamente, el lead se enfría inmediatamente
+  if (propuesta?.estado === 'rechazada' || propuesta?.rechazada) {
+    return 20 // Frío ❄️
+  }
+
+  // Si la propuesta ya fue aceptada, el lead está en máxima conversión
+  if (propuesta?.aceptada || propuesta?.estado === 'aceptada') {
+    return 95 // Caliente 🔥 (Listo para pago)
+  }
+
   let score = 0
-  
-  // Factor 1: Fuente de captación (30 puntos máximo)
-  if (contacto.fuente === 'Instagram Ads') score += 25
-  else if (contacto.fuente === 'TikTok Ads') score += 20
-  else if (contacto.fuente === 'Convenio') score += 30
-  else score += 15 // Orgánico
-  
-  // Factor 2: Completitud de datos (20 puntos máximo)
-  if (contacto.email && contacto.telefono) score += 20
-  else if (contacto.email || contacto.telefono) score += 10
-  
-  // Factor 3: Interés específico (25 puntos máximo)
-  if (contacto.interes === 'facial') score += 25
-  else if (contacto.interes === 'corporal') score += 20
-  else score += 15 // relajacion
-  
-  // Factor 4: Tipo de piel (15 puntos máximo)
-  if (contacto.tipoPiel && contacto.tipoPiel !== 'no_se') score += 15
-  else score += 5
-  
-  // Factor 5: Tiempo desde registro (10 puntos máximo)
-  const diasDesdeRegistro = Math.floor((new Date() - new Date(contacto.fecha_registro)) / (1000 * 60 * 60 * 24))
-  if (diasDesdeRegistro <= 7) score += 10
-  else if (diasDesdeRegistro <= 30) score += 7
-  else score += 3
-  
-  return Math.min(100, Math.max(0, score))
+
+  // ── 1. FORMULARIO INICIAL (BUYERS / LANDING) - Máximo 35 pts ──
+  // Fuente de captación (máx. 12 pts)
+  if (contacto.fuente === 'Convenio') score += 12
+  else if (contacto.fuente === 'Instagram Ads' || contacto.fuente === 'TikTok Ads') score += 10
+  else score += 6 // Orgánico
+
+  // Completitud de contacto (máx. 13 pts)
+  if (contacto.email && contacto.telefono) score += 13
+  else if (contacto.email || contacto.telefono) score += 7
+
+  // Interés inicial en servicio (máx. 10 pts)
+  const interes = (contacto.interes || '').toLowerCase()
+  if (interes.includes('facial') || interes.includes('corporal')) score += 10
+  else if (interes.includes('relaj') || interes.includes('masaje') || interes.includes('piedras')) score += 9
+  else score += 6
+
+  // ── 2. FORMULARIO DE ENRIQUECIMIENTO (PERFIL PROFUNDO) - Máximo 35 pts ──
+  const formCompletado = Boolean(
+    enriquecimiento?.completado || 
+    enriquecimiento?.fecha_completado ||
+    enriquecimiento?.enriquecimientoCompletado
+  )
+
+  if (formCompletado) {
+    score += 15 // Gran salto de calidad: el cliente dedicó tiempo a detallar su perfil
+
+    // Presupuesto informado
+    const presupuesto = String(enriquecimiento.presupuesto || '').toLowerCase()
+    if (presupuesto && !presupuesto.includes('no especificado')) {
+      score += 7
+    }
+
+    // Frecuencia deseada (frecuencia regular indica mayor recurrencia)
+    const frec = String(enriquecimiento.frecuencia_deseada || enriquecimiento.frecuencia || '').toLowerCase()
+    if (frec && (frec.includes('mensual') || frec.includes('quincenal') || frec.includes('semanal') || frec.includes('regular'))) {
+      score += 7
+    } else if (frec) {
+      score += 4
+    }
+
+    // Preferencias sensoriales (aroma, música, temperatura) y motivo
+    if (enriquecimiento.preferencia_aroma || enriquecimiento.aroma || enriquecimiento.motivo_principal || enriquecimiento.motivo) {
+      score += 6
+    }
+  }
+
+  // ── 3. CICLO DE VIDA DE LA PROPUESTA - Máximo 30 pts ──
+  if (propuesta?.estado === 'enviada' || propuesta?.enviada || propuesta?.token) {
+    score += 15 // La propuesta fue enviada y está en manos del cliente
+  }
+
+  if (propuesta?.interacciones > 0 || propuesta?.enNegociacion) {
+    score += 10 // El cliente ha interactuado activamente con el chatbot
+  }
+
+  // ── Factor de recencia (máx. 5 pts de bonificación de frescura) ──
+  if (contacto.fecha_registro) {
+    const dias = Math.floor((new Date() - new Date(contacto.fecha_registro)) / (1000 * 60 * 60 * 24))
+    if (dias <= 7) score += 5
+    else if (dias <= 21) score += 3
+  }
+
+  return Math.min(100, Math.max(10, score))
 }
 
 export async function calificarLead(idContacto, score, automatico = false) {
@@ -191,11 +241,11 @@ export async function calificarLead(idContacto, score, automatico = false) {
 }
 
 /**
- * Califica automáticamente un lead basado en sus datos
+ * Califica automáticamente un lead basado en sus datos combinados
  */
-export async function calificarLeadAutomatico(idContacto, datosContacto) {
+export async function calificarLeadAutomatico(idContacto, datosContacto = {}, datosEnriquecimiento = {}, datosPropuesta = {}) {
   try {
-    const score = calcularLeadScoreAutomatico(datosContacto)
+    const score = calcularLeadScoreAutomatico(datosContacto, datosEnriquecimiento, datosPropuesta)
     return await calificarLead(idContacto, score, true)
   } catch (error) {
     logger.error('leadsApi', 'Error en calificación automática', { idContacto, error })
@@ -225,14 +275,19 @@ export async function aceptarPropuesta(idContacto, datosPropuesta) {
       throw handleSupabaseError(checkError, 'verificar lead_detalle')
     }
 
-    // Si no existe el registro, crearlo primero con el score actual
+    // Calcular nuevo score proporcional conservando la diferenciación del lead
+    const scoreActual = existingLead?.lead_score || 55
+    // Aceptar propuesta suma +20 pts de bonificación y asegura estar en rango caliente (mínimo 75)
+    const scoreAceptado = Math.min(100, Math.max(scoreActual + 20, 75))
+
+    // Si no existe el registro, crearlo con el score calculado
     if (!existingLead) {
       logger.info('leadsApi', 'Creando registro en lead_detalle para aceptar propuesta')
       const { error: insertError } = await client
         .from('lead_detalle')
         .insert({
           id_contacto: idContacto,
-          lead_score: 50, // Score mínimo para que pueda pasar a PAYERS
+          lead_score: scoreAceptado,
           fecha_calificacion: new Date().toISOString(),
           propuesta_aceptada: true,
           fecha_aceptacion: new Date().toISOString(),
@@ -244,10 +299,12 @@ export async function aceptarPropuesta(idContacto, datosPropuesta) {
       // Asegurar que el estado del contacto sea 'lead'
       await transicionarBuyerALead(idContacto)
     } else {
-      // Si existe, actualizarlo
+      // Si existe, actualizarlo sumando la bonificación de aceptación
       const { error } = await client
         .from('lead_detalle')
         .update({
+          lead_score: scoreAceptado,
+          fecha_calificacion: new Date().toISOString(),
           propuesta_aceptada: true,
           fecha_aceptacion: new Date().toISOString(),
           datos_propuesta: datosPropuesta
@@ -275,6 +332,45 @@ export async function aceptarPropuesta(idContacto, datosPropuesta) {
     return createResponse(false, null, {
       message: error.message || 'Error al aceptar propuesta',
       code: error.code || 'PROPOSAL_ERROR'
+    })
+  }
+}
+
+/**
+ * Rechaza la propuesta y ajusta el lead score a Frío (20 pts)
+ */
+export async function rechazarPropuesta(idContacto, motivo = '') {
+  try {
+    const client = requireSupabase()
+
+    const { data: existingLead } = await client
+      .from('lead_detalle')
+      .select('lead_score')
+      .eq('id_contacto', idContacto)
+      .single()
+
+    const scoreActual = existingLead?.lead_score || 50
+    // Enfría el score proporcionalmente (-35 pts, mínimo 15)
+    const nuevoScore = Math.max(15, scoreActual - 35)
+
+    const { error } = await client
+      .from('lead_detalle')
+      .update({
+        lead_score: nuevoScore,
+        fecha_calificacion: new Date().toISOString(),
+        propuesta_aceptada: false
+      })
+      .eq('id_contacto', idContacto)
+
+    if (error) throw handleSupabaseError(error, 'rechazar propuesta en lead_detalle')
+
+    logger.info('leadsApi', `Propuesta rechazada para contacto ${idContacto}, score ajustado a ${nuevoScore}`, { motivo })
+    return createResponse(true, { message: 'Propuesta rechazada, score actualizado', score: nuevoScore })
+  } catch (error) {
+    logger.error('leadsApi', 'Error rechazando propuesta', { idContacto, error })
+    return createResponse(false, null, {
+      message: error.message || 'Error al rechazar propuesta',
+      code: 'REJECT_ERROR'
     })
   }
 }

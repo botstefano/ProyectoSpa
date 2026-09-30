@@ -2,20 +2,12 @@ import { useMemo, useState, useEffect } from 'react'
 import {
   obtenerLeadsParaPago,
   crearCronogramaPagos,
-  procesarPagoCompleto,
   obtenerDetallesPago,
   verificarPagoConfirmado
 } from './api/payersApi'
-import { enviarEmailPagoSimulado } from './api/pagoSimuladoApi'
+import { enviarEmailPagoSimulado, obtenerPagosContacto } from './api/pagoSimuladoApi'
 import { isSupabaseConfigured } from '../../lib/supabaseClient'
 import StaffUniversalNav from '../../shared/components/StaffUniversalNav'
-
-const PAYMENT_METHODS = [
-  { id: 'efectivo', label: 'Efectivo', icon: 'cash' },
-  { id: 'tarjeta', label: 'Tarjeta', icon: 'card' },
-  { id: 'transferencia', label: 'Transferencia', icon: 'bank' },
-  { id: 'yape-plin', label: 'Yape / Plin', icon: 'phone' },
-]
 
 function Icon({ name, size = 20 }) {
   const common = {
@@ -145,14 +137,6 @@ function Step({ number, label, status, active }) {
   )
 }
 
-function MethodIcon({ name }) {
-  return (
-    <span className="payment-method-icon">
-      <Icon name={name} size={22} />
-    </span>
-  )
-}
-
 function extractServiceFromLead(lead) {
   if (!lead) return null
   const det = Array.isArray(lead.lead_detalle) ? lead.lead_detalle[0] : lead.lead_detalle
@@ -264,10 +248,6 @@ export default function PayersStaffPage() {
   const [selectedClient, setSelectedClient] = useState(null)
   const [service, setService] = useState(null)
   const [schedule, setSchedule] = useState([])
-  const [selectedMethod, setSelectedMethod] = useState('yape-plin')
-  const [amount, setAmount] = useState('')
-  const [reference, setReference] = useState('')
-  const [result, setResult] = useState('confirmado')
   const [history, setHistory] = useState([])
   const [notice, setNotice] = useState('')
   const [search, setSearch] = useState('')
@@ -275,6 +255,8 @@ export default function PayersStaffPage() {
   const [source, setSource] = useState('demo')
   const [paymentDetails, setPaymentDetails] = useState(null)
   const [sendingPaymentEmail, setSendingPaymentEmail] = useState(false)
+  const [paymentToken, setPaymentToken] = useState(null)
+  const [checkingPayment, setCheckingPayment] = useState(false)
 
   const confirmedTotal = useMemo(
     () => history.filter((item) => (item.resultado || '').toLowerCase() === 'confirmado').reduce((sum, item) => sum + item.monto, 0),
@@ -306,13 +288,24 @@ export default function PayersStaffPage() {
 
     const clientService = extractServiceFromLead(lead)
     setService(clientService)
-    setAmount(String(Math.round((clientService.total / 3) * 100) / 100))
 
     try {
       const cronograma = await crearCronogramaPagos(lead.id_contacto, clientService.nombre, clientService.total, 3)
 
       const detalles = await obtenerDetallesPago(lead.id_contacto)
       const isPaid = detalles && ((detalles.estado_pago || '').toLowerCase() === 'confirmado' || (detalles.estado_pago || '').toLowerCase() === 'pagado')
+
+      // Buscar si ya tiene token de pago generado para el enlace del cliente
+      try {
+        const pagos = await obtenerPagosContacto(lead.id_contacto)
+        if (pagos && pagos.length > 0) {
+          setPaymentToken(pagos[0].token_pago)
+        } else {
+          setPaymentToken(null)
+        }
+      } catch (_) {
+        setPaymentToken(null)
+      }
 
       if (isPaid) {
         setPaymentDetails(detalles)
@@ -430,6 +423,9 @@ export default function PayersStaffPage() {
       )
 
       if (result.success) {
+        if (result.data?.token) {
+          setPaymentToken(result.data.token)
+        }
         const linkManual = result.data.linkManual || `${window.location.origin}/pago/${result.data.token}`
         showNotice(
           result.data.emailEnviado 
@@ -447,100 +443,48 @@ export default function PayersStaffPage() {
     }
   }
 
-  async function registerPayment() {
-    if (!selectedClient) {
-      showNotice('Selecciona un cliente primero.')
-      return
-    }
-
-    const numericAmount = Number(amount)
-
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      showNotice('Ingresa un monto válido mayor a S/ 0.00.')
-      return
-    }
-
-    if (numericAmount > balance) {
-      showNotice(`El monto supera el saldo pendiente de ${money(balance)}.`)
-      return
-    }
-
-    const methodLabel = PAYMENT_METHODS.find((method) => method.id === selectedMethod)?.label ?? selectedMethod
-    const paymentDate = new Date().toLocaleDateString('es-ES')
-    
-    // Datos del pago para Supabase
-    const datosPago = {
-      estado_pago: result === 'confirmado' ? 'confirmado' : result === 'rechazado' ? 'rechazado' : 'pendiente',
-      fecha_pago: new Date().toISOString(),
-      servicio_contratado: service?.nombre || 'Servicio general',
-      monto_total: service?.total || numericAmount,
-      metodo_pago: methodLabel
-    }
-
+  async function refreshPaymentStatus() {
+    if (!selectedClient) return
     try {
-      // Procesar pago en Supabase
-      if (source === 'supabase') {
-        await procesarPagoCompleto(selectedClient.id_contacto, datosPago)
-      }
+      setCheckingPayment(true)
+      const confirmado = await verificarPagoConfirmado(selectedClient.id_contacto)
+      const detalles = await obtenerDetallesPago(selectedClient.id_contacto)
 
-      const transaction = {
-        id: Date.now(),
-        fecha: paymentDate,
-        metodo: methodLabel,
-        monto: numericAmount,
-        resultado: result === 'confirmado' ? 'Confirmado' : result === 'rechazado' ? 'Rechazado' : 'Pendiente',
-        referencia: reference.trim() || '—',
-      }
+      if (confirmado || (detalles && (detalles.estado_pago === 'confirmado' || detalles.estado_pago === 'pagado'))) {
+        setPaymentDetails(detalles)
+        const clientService = service || extractServiceFromLead(selectedClient)
+        const montoPagado = Number(detalles?.monto_total) || clientService.total
 
-      setHistory((prev) => [transaction, ...prev])
+        setHistory([{
+          id: detalles?.id_pago_simulado || detalles?.id_contacto || Date.now(),
+          fecha: new Date(detalles?.fecha_pago || Date.now()).toLocaleDateString('es-ES'),
+          metodo: (detalles?.metodo_pago || 'Transferencia').toUpperCase(),
+          monto: montoPagado,
+          resultado: 'Confirmado',
+          referencia: detalles?.referencia || 'Pago verificado online'
+        }])
 
-      if (transaction.resultado === 'Confirmado') {
-        let remaining = numericAmount
-        const nextSchedule = schedule.map((item) => {
-          if (item.estado !== 'Pagada' && remaining >= item.monto) {
-            remaining -= item.monto
-            return { ...item, estado: 'Pagada' }
-          }
-          return item
-        })
-        setSchedule(nextSchedule)
-        
-        // Actualizar detalles de pago
-        const updatedDetails = await obtenerDetallesPago(selectedClient.id_contacto)
-        if (updatedDetails) {
-          setPaymentDetails(updatedDetails)
-        }
-        
-        showNotice(source === 'supabase' 
-          ? '✓ Pago confirmado en base de datos. La reserva quedó habilitada y el servicio se activó correctamente.' 
-          : 'Pago confirmado. La reserva quedó habilitada y el servicio se activó correctamente.')
-      } else if (transaction.resultado === 'Rechazado') {
-        showNotice('Pago rechazado. El servicio permanece pendiente de activación.')
+        setSchedule(prev => prev.map((item, index) => index === 0 ? { ...item, estado: 'Pagada' } : item))
+        showNotice('✓ ¡Pago confirmado detectado! El cliente completó su pago en la pasarela online.')
       } else {
-        showNotice('Pago registrado como pendiente de validación.')
+        showNotice('El cliente aún no ha completado el pago en la pasarela online.')
       }
-
-      setReference('')
-    } catch (error) {
-      console.error('[Payers] Error registrando pago:', error)
-      showNotice(`Error al registrar pago: ${error.message}`)
+    } catch (err) {
+      console.error('[Payers] Error comprobando pago:', err)
+      showNotice('No se pudo verificar el estado en este momento.')
+    } finally {
+      setCheckingPayment(false)
     }
   }
 
-  function confirmService() {
-    showNotice(source === 'supabase' 
-      ? 'La contratación quedó formalizada. La constancia digital está lista.' 
-      : 'La contratación quedó formalizada. La constancia digital está lista para la demo.')
-  }
-
-  function generateReceipt() {
-    if (history.length === 0) {
-      showNotice('Primero registra un pago para generar su comprobante.')
+  function copyPaymentLink() {
+    if (!paymentToken) {
+      showNotice('Primero presiona "Enviar email de pago al cliente" para generar el enlace.')
       return
     }
-    showNotice(source === 'supabase' 
-      ? 'Comprobante/constancia generado correctamente.' 
-      : 'Comprobante/constancia generado en modo demo.')
+    const link = `${window.location.origin}/pago/${paymentToken}`
+    navigator.clipboard.writeText(link)
+    showNotice('📋 Enlace de pago copiado al portapapeles. Listo para compartir por WhatsApp.')
   }
 
   if (loading) {
@@ -576,11 +520,10 @@ export default function PayersStaffPage() {
         </section>
 
         <section className="payers-stepper" aria-label="Flujo PAYERS">
-          <Step number="1" label="Confirmación del servicio" status="done" />
-          <Step number="2" label="Formalización de la contratación" status="done" />
-          <Step number="3" label="Registro de pago" active />
-          <Step number="4" label="Validación" />
-          <Step number="5" label="Servicio activado" status={initialPaid ? 'done' : undefined} />
+          <Step number="1" label="Cliente y propuesta" status="done" />
+          <Step number="2" label="Pago online del cliente" active={!initialPaid} status={initialPaid ? 'done' : undefined} />
+          <Step number="3" label="Cronograma y validación" status={initialPaid ? 'done' : undefined} />
+          <Step number="4" label="Servicio activado" status={initialPaid ? 'done' : undefined} />
         </section>
 
         <div className={`payers-note ${source === 'supabase' ? 'supabase-connected' : 'demo-mode'}`}>
@@ -600,10 +543,18 @@ export default function PayersStaffPage() {
         )}
 
         <section className="payers-grid payers-top-grid">
+          {/* TARJETA 1: CLIENTE Y SERVICIO FORMALIZADO */}
           <article className="payers-card" id="cliente">
             <div className="payers-card-title">
-              <h2>1. Datos del cliente</h2>
+              <div>
+                <h2>1. Cliente y Servicio Contratado</h2>
+                <span className="payers-card-sub">Ficha del lead formalizado y propuesta acordada en Fase 2.</span>
+              </div>
+              <span className={`schedule-chip ${initialPaid ? 'paid' : ''}`}>
+                {initialPaid ? '✓ Liquidado' : '⏳ Pendiente'}
+              </span>
             </div>
+
             <div className="payers-search">
               <input
                 value={search}
@@ -677,63 +628,70 @@ export default function PayersStaffPage() {
                   <div className="client-data">
                     <h3>{selectedClient.nombre}</h3>
                     <div className="client-meta">
-                      <span><strong>ID Contacto:</strong> {selectedClient.id_contacto}</span>
+                      <span><strong>ID:</strong> {selectedClient.id_contacto}</span>
                       <span><strong>Teléfono:</strong> {selectedClient.telefono || 'No provisto'}</span>
                       <span><strong>Email:</strong> {selectedClient.email || 'No provisto'}</span>
-                      <span><strong>Lead Score:</strong> {(() => {
+                      <span><strong>Score:</strong> {(() => {
                         const det = Array.isArray(selectedClient.lead_detalle) ? selectedClient.lead_detalle[0] : selectedClient.lead_detalle
                         return det?.lead_score ?? 'N/A'
                       })()}</span>
                     </div>
-                    <div className="phase-status">
-                      <span>Estado del proceso:</span>
-                      <b style={{ color: initialPaid ? '#b7d2b9' : '#e8ca8f' }}>
-                        {initialPaid ? 'Fase 3: Pago confirmado (PAYER)' : 'Fase 2: Lead con propuesta'}
-                      </b>
-                    </div>
                   </div>
                 </div>
 
+                {service && (
+                  <div className="service-summary" style={{ marginTop: '12px' }}>
+                    <div className="service-visual" aria-hidden="true">
+                      <div className="face-illustration">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                      <small>Origen Spa</small>
+                    </div>
+
+                    <div className="service-content">
+                      <div className="service-head">
+                        <div>
+                          <h3>{service?.nombre || 'Sin servicio'}</h3>
+                          <span>{service?.duracion || 'N/A'} · Categoría {service?.categoria || 'N/A'}</span>
+                        </div>
+                        <span className="service-state">{serviceStatus}</span>
+                      </div>
+
+                      <div className="service-date">
+                        <Icon name="calendar" size={17} />
+                        <span>Fecha de atención: <strong>{service?.fechaAtencion || 'Sin fecha'}</strong></span>
+                      </div>
+
+                      <div className="service-pricing">
+                        <div><span>Precio regular</span><strong>{money(service?.precioRegular || 0)}</strong></div>
+                        <div><span>Descuento</span><strong>- {money(service?.descuento || 0)}</strong></div>
+                        <div className="service-total"><span>Total acordado</span><strong>{money(service?.total || 0)}</strong></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="client-proof" style={{ 
+                  marginTop: '12px',
                   background: initialPaid ? 'rgba(183, 210, 185, 0.15)' : undefined, 
                   borderColor: initialPaid ? '#b7d2b9' : undefined 
                 }}>
                   <Icon name="check" size={17} />
                   <span>
                     {initialPaid 
-                      ? `✓ Pago online completado exitosamente por ${money(confirmedTotal || service?.total || 120)}. Servicio activado y listo para atención en Fase 4 (CUSTOMERS).` 
-                      : 'Lead proveniente de Fase 2 con propuesta aceptada, listo para proceso de pago.'}
+                      ? `✓ Pago online completado exitosamente por ${money(confirmedTotal || service?.total || 120)}. Servicio activado y habilitado para cabina en Fase 4.` 
+                      : 'Lead proveniente de Fase 2 con propuesta aceptada. En espera de confirmación de pago para activación.'}
                   </span>
                 </div>
-
-                {selectedClient.email && (
-                  <button 
-                    className="primary-payment-button" 
-                    type="button" 
-                    onClick={sendPaymentEmail}
-                    disabled={sendingPaymentEmail}
-                    style={{ 
-                      marginTop: '15px', 
-                      width: '100%',
-                      background: initialPaid ? 'rgba(255, 255, 255, 0.08)' : undefined,
-                      border: initialPaid ? '1px solid rgba(255, 255, 255, 0.2)' : undefined
-                    }}
-                  >
-                    <Icon name={initialPaid ? "check" : "bell"} size={17} />
-                    {sendingPaymentEmail 
-                      ? 'Enviando email...' 
-                      : initialPaid 
-                        ? '✓ Pago ya completado (Reenviar link si es necesario)' 
-                        : '📧 Enviar email de pago al cliente'}
-                  </button>
-                )}
 
                 {initialPaid && (
                   <a 
                     href="/staff/customers" 
                     className="primary-payment-button"
                     style={{
-                      marginTop: '10px',
+                      marginTop: '14px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -748,7 +706,7 @@ export default function PayersStaffPage() {
                       boxShadow: '0 4px 12px rgba(45, 106, 79, 0.35)',
                     }}
                   >
-                    <span>➔ Pasar a Fase 4: Atención al Cliente</span>
+                    <span>➔ Continuar a Fase 4: Atención en Clientes</span>
                   </a>
                 )}
               </>
@@ -760,372 +718,267 @@ export default function PayersStaffPage() {
             )}
           </article>
 
-          <article className="payers-card" id="servicio">
+          {/* TARJETA 2: CONTROL DE COBRANZA Y ENLACE ONLINE */}
+          <article className="payers-card" id="control-pago">
             <div className="payers-card-title">
-              <h2>2. Servicio contratado</h2>
-              {service && (
-                <button className="outline-button" type="button" onClick={() => showNotice('Edición controlada del servicio: disponible en la demo visual.')}>
-                  <Icon name="edit" size={16} /> Editar
-                </button>
+              <div>
+                <h2>2. Control de Cobranza y Enlace Online</h2>
+                <span className="payers-card-sub">Gestión del enlace del cliente, canales y pasarela.</span>
+              </div>
+              <span className={`schedule-chip ${initialPaid ? 'paid' : ''}`}>
+                {initialPaid ? '✓ Liquidado' : '⏳ Pendiente'}
+              </span>
+            </div>
+
+            {/* Estado principal de la transacción online */}
+            <div style={{
+              background: initialPaid ? 'rgba(183, 210, 185, 0.12)' : 'rgba(232, 202, 143, 0.1)',
+              border: `1px solid ${initialPaid ? 'rgba(183, 210, 185, 0.35)' : 'rgba(232, 202, 143, 0.3)'}`,
+              borderRadius: '8px',
+              padding: '0.9rem',
+              marginBottom: '1rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
+                <Icon name={initialPaid ? 'check' : 'clock'} size={18} />
+                <strong style={{ color: initialPaid ? '#b7d2b9' : '#e8ca8f', fontSize: '0.88rem' }}>
+                  {initialPaid ? 'Pago completado por el cliente' : 'Pendiente de pago por el cliente'}
+                </strong>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-ink-muted, #B9C4B7)', lineHeight: 1.45 }}>
+                {initialPaid
+                  ? `El cliente completó exitosamente su pago en la pasarela online por ${money(confirmedTotal || service?.total || 0)}. El comprobante fue generado y el servicio quedó habilitado.`
+                  : `El cliente debe ingresar a su enlace seguro para seleccionar su método preferido (Yape/Plin, Tarjeta, Transferencia o Efectivo) y pagar ${money(service?.total || 0)}.`}
+              </p>
+            </div>
+
+            {/* Acceso y compartición del enlace de pago */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: '0.4rem' }}>
+                Enlace seguro de pago del cliente (página pública):
+              </label>
+              {paymentToken ? (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/pago/${paymentToken}`}
+                    style={{
+                      flex: 1,
+                      background: 'rgba(0,0,0,0.25)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#F3EEE2',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.76rem',
+                      fontFamily: 'monospace'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="outline-button"
+                    onClick={copyPaymentLink}
+                    title="Copiar enlace de pago para compartir por WhatsApp"
+                    style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontSize: '0.78rem' }}
+                  >
+                    Copiar
+                  </button>
+                  <a
+                    href={`/pago/${paymentToken}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="outline-button"
+                    title="Abrir la pasarela en una pestaña nueva"
+                    style={{ padding: '8px 12px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                  >
+                    Abrir ↗
+                  </a>
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', padding: '6px 0' }}>
+                  💡 Presiona <strong>"Enviar link por Correo"</strong> para generar el enlace directo del cliente.
+                </div>
               )}
             </div>
 
-            {service ? (
-              <>
-                <div className="service-summary">
-                  <div className="service-visual" aria-hidden="true">
-                    <div className="face-illustration">
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                    <small>Origen Wellness</small>
-                  </div>
+            {/* Acciones de recordatorio y canales */}
+            <div style={{ marginBottom: '1rem', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="outline-button"
+                onClick={() => {
+                  if (!selectedClient) return
+                  const cleanTel = (selectedClient.telefono || selectedClient.perfil?.telefono || '').replace(/\D/g, '')
+                  const tel = cleanTel.startsWith('51') ? cleanTel : `51${cleanTel}`
+                  const primerNombre = (selectedClient.nombre || 'Cliente').split(' ')[0]
+                  const link = paymentToken ? `${window.location.origin}/pago/${paymentToken}` : `${window.location.origin}/staff/payers`
+                  const msg = encodeURIComponent(`¡Hola ${primerNombre}! Te saluda el equipo de Origen Spa. Te compartimos tu enlace seguro para completar el pago de tu reserva (${service?.nombre || 'Servicio Spa'}): ${link}. ¡Quedamos atentos a tu confirmación!`)
+                  window.open(`https://wa.me/${tel}?text=${msg}`, '_blank')
+                  showNotice(`📲 Abriendo WhatsApp para enviar recordatorio a ${selectedClient.nombre}...`)
+                }}
+                style={{ fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'center' }}
+              >
+                <Icon name="phone" size={15} />
+                <span>Recordar por WhatsApp</span>
+              </button>
+              <button
+                type="button"
+                className="outline-button"
+                onClick={sendPaymentEmail}
+                disabled={sendingPaymentEmail}
+                style={{ fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'center' }}
+              >
+                <Icon name="mail" size={15} />
+                <span>{sendingPaymentEmail ? 'Enviando...' : initialPaid ? 'Reenviar comprobante' : 'Enviar link por Correo'}</span>
+              </button>
+            </div>
 
-                  <div className="service-content">
-                    <div className="service-head">
-                      <div>
-                        <h3>{service?.nombre || 'Sin servicio'}</h3>
-                        <span>{service?.duracion || 'N/A'} · Categoría {service?.categoria || 'N/A'}</span>
-                      </div>
-                      <span className="service-state">{serviceStatus}</span>
-                    </div>
+            {/* Botón para verificar en tiempo real */}
+            <button
+              type="button"
+              className="primary-payment-button"
+              onClick={refreshPaymentStatus}
+              disabled={checkingPayment}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              <Icon name="trend" size={17} />
+              {checkingPayment ? 'Consultando pasarela...' : '🔄 Comprobar si el cliente ya pagó'}
+            </button>
 
-                    <div className="service-date">
-                      <Icon name="calendar" size={17} />
-                      <span>Fecha de atención: <strong>{service?.fechaAtencion || 'Sin fecha'}</strong></span>
-                    </div>
+            <p className="secure-note" style={{ marginTop: '0.75rem', fontSize: '0.72rem' }}>
+              El cliente procesa su pago de manera autónoma en su dispositivo. Este panel sincroniza automáticamente los pagos completados en la base de datos.
+            </p>
 
-                    <div className="service-pricing">
-                      <div><span>Precio regular</span><strong>{money(service?.precioRegular || 0)}</strong></div>
-                      <div><span>Descuento</span><strong>- {money(service?.descuento || 0)}</strong></div>
-                      <div className="service-total"><span>Total del servicio</span><strong>{money(service?.total || 0)}</strong></div>
-                    </div>
-                  </div>
-                </div>
-
-                <button className="secondary-cta" type="button" onClick={confirmService}>
-                  <Icon name="check" size={17} />
-                  Confirmar contratación y generar constancia
-                </button>
-              </>
-            ) : (
-              <div className="client-proof">
-                <Icon name="info" size={17} />
-                <span>Selecciona un cliente para ver el servicio contratado.</span>
-              </div>
-            )}
+            {notice && <div className="payers-toast" role="status">{notice}</div>}
           </article>
         </section>
 
         <section className="payers-grid payers-main-grid">
-          <div className="payers-left-column">
-            <article className="payers-card" id="agenda">
-              <div className="payers-card-title">
-                <div>
-                  <h2>3. Cronograma de pagos</h2>
-                  <span className="payers-card-sub">Generado automáticamente según el servicio contratado.</span>
-                </div>
-                <span className="schedule-chip">{initialPaid ? '1 cuota pagada' : '3 cuotas pendientes'}</span>
+          {/* TARJETA 3: CRONOGRAMA DE PAGOS Y SESIONES */}
+          <article className="payers-card" id="agenda">
+            <div className="payers-card-title">
+              <div>
+                <h2>3. Cronograma de pagos y sesiones</h2>
+                <span className="payers-card-sub">Generado automáticamente según el servicio contratado.</span>
               </div>
+              <span className="schedule-chip">{initialPaid ? '1 cuota pagada' : '3 cuotas pendientes'}</span>
+            </div>
 
-              <div className="table-wrap">
-                <table className="payment-table">
-                  <thead>
-                    <tr>
-                      <th>N°</th>
-                      <th>Concepto</th>
-                      <th>Monto</th>
-                      <th>Fecha de vencimiento</th>
-                      <th>Estado</th>
+            <div className="table-wrap">
+              <table className="payment-table">
+                <thead>
+                  <tr>
+                    <th>N°</th>
+                    <th>Concepto</th>
+                    <th>Monto</th>
+                    <th>Fecha de vencimiento</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {schedule.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.id}</td>
+                      <td>{item.concepto}</td>
+                      <td>{money(item.monto)}</td>
+                      <td>{item.vencimiento}</td>
+                      <td>
+                        <span className={`status-pill ${item.estado.toLowerCase()}`}>
+                          {item.estado === 'Pagada' && <Icon name="check" size={14} />}
+                          {item.estado}
+                        </span>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {schedule.map((item) => (
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="balance-box">
+              <div>
+                <span>Saldo pendiente</span>
+                <strong>{money(balance)}</strong>
+              </div>
+              <span>de {money(service?.total || 0)} contratados</span>
+            </div>
+
+            <div className="schedule-footnote">
+              <Icon name="info" size={17} />
+              <span>{initialPaid ? 'El servicio ya fue activado. La próxima cuota seguirá el cronograma acordado.' : 'El servicio se activa cuando se confirme el pago en la pasarela online.'}</span>
+            </div>
+          </article>
+
+          {/* TARJETA 4: HISTORIAL DE PAGOS Y MÉTRICAS */}
+          <article className="payers-card" id="historial">
+            <div className="payers-card-title">
+              <div>
+                <h2>4. Historial de Pagos y Métricas</h2>
+                <span className="payers-card-sub">Transacciones online y rendimiento de cobranza.</span>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table className="payment-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Método</th>
+                    <th>Monto</th>
+                    <th>Resultado</th>
+                    <th>Referencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="empty-row">
+                        <Icon name="info" size={16} />
+                        Aún no se han registrado pagos para este cliente.
+                      </td>
+                    </tr>
+                  ) : (
+                    history.map((item) => (
                       <tr key={item.id}>
-                        <td>{item.id}</td>
-                        <td>{item.concepto}</td>
+                        <td>{item.fecha}</td>
+                        <td>{item.metodo}</td>
                         <td>{money(item.monto)}</td>
-                        <td>{item.vencimiento}</td>
                         <td>
-                          <span className={`status-pill ${item.estado.toLowerCase()}`}>
-                            {item.estado === 'Pagada' && <Icon name="check" size={14} />}
-                            {item.estado}
+                          <span className={`result-pill ${item.resultado.toLowerCase()}`}>
+                            {item.resultado}
                           </span>
                         </td>
+                        <td>{item.referencia}</td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-              <div className="balance-box">
-                <div>
-                  <span>Saldo pendiente</span>
-                  <strong>{money(balance)}</strong>
+            {/* KPIs compactos integrados */}
+            <div style={{ marginTop: '1.2rem', paddingTop: '1rem', borderTop: '1px solid rgba(243, 238, 226, 0.1)' }}>
+              <span style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '8px' }}>
+                Indicadores de Cobranza (KPIs en vivo):
+              </span>
+              <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+                <div className="kpi-item" style={{ padding: '8px 10px' }}>
+                  <span className="kpi-icon"><Icon name="trend" size={16} /></span>
+                  <div><small>Tasa confirmada</small><strong>{confirmedRate}%</strong></div>
                 </div>
-                <span>de {money(service?.total || 0)} contratados</span>
-              </div>
-
-              <div className="schedule-footnote">
-                <Icon name="info" size={17} />
-                <span>{initialPaid ? 'El servicio ya fue activado. La próxima cuota seguirá el cronograma.' : 'El servicio se activa cuando se confirme el pago inicial.'}</span>
-              </div>
-            </article>
-
-            <article className="payers-card">
-              <div className="payers-card-title">
-                <div>
-                  <h2>4. Historial de pagos</h2>
-                  <span className="payers-card-sub">Intentos y resultados registrados en la sesión.</span>
+                <div className="kpi-item" style={{ padding: '8px 10px' }}>
+                  <span className="kpi-icon"><Icon name="calendar" size={16} /></span>
+                  <div><small>Cumplimiento</small><strong>{scheduleCompliance}%</strong></div>
                 </div>
-                <button className="text-button" type="button" onClick={generateReceipt}>Generar comprobante</button>
-              </div>
-
-              <div className="table-wrap">
-                <table className="payment-table">
-                  <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Método</th>
-                      <th>Monto</th>
-                      <th>Resultado</th>
-                      <th>Referencia</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="empty-row">
-                          <Icon name="info" size={16} />
-                          Aún no se han registrado pagos.
-                        </td>
-                      </tr>
-                    ) : (
-                      history.map((item) => (
-                        <tr key={item.id}>
-                          <td>{item.fecha}</td>
-                          <td>{item.metodo}</td>
-                          <td>{money(item.monto)}</td>
-                          <td>
-                            <span className={`result-pill ${item.resultado.toLowerCase()}`}>
-                              {item.resultado}
-                            </span>
-                          </td>
-                          <td>{item.referencia}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </article>
-
-            <article className="payers-card">
-              <div className="payers-card-title">
-                <div>
-                  <h2>5. Agente y alertas de impulsamiento</h2>
-                  <span className="payers-card-sub">Seguimiento automatizado del cronograma.</span>
+                <div className="kpi-item" style={{ padding: '8px 10px' }}>
+                  <span className="kpi-icon"><Icon name="clock" size={16} /></span>
+                  <div><small>Pendientes</small><strong>{pendingRate}%</strong></div>
+                </div>
+                <div className="kpi-item" style={{ padding: '8px 10px' }}>
+                  <span className="kpi-icon"><Icon name="money" size={16} /></span>
+                  <div><small>Recaudado</small><strong>{history.length ? money(confirmedTotal) : 'S/ 0.00'}</strong></div>
                 </div>
               </div>
-
-              <div className="agent-alert-grid">
-                <div className="agent-box">
-                  <div className="agent-icon">
-                    <Icon name="robot" size={23} />
-                  </div>
-                  <div>
-                    <h3>Agente IA de cobranza</h3>
-                    <p>Monitorea cuotas, vencimientos y pagos pendientes.</p>
-                    <ul>
-                      <li>Envía recordatorios por WhatsApp/email.</li>
-                      <li>Detecta cuotas vencidas y pendientes.</li>
-                      <li>Escala casos que requieren atención humana.</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className={`alert-box ${initialPaid ? 'success' : ''}`}>
-                  <div className="alert-icon"><Icon name={initialPaid ? 'check' : 'alert'} size={21} /></div>
-                  <div>
-                    <h3>{initialPaid ? 'Seguimiento programado' : 'Alerta de impulsamiento'}</h3>
-                    {initialPaid ? (
-                      <p>Próxima cuota: 01/10/2026 → recordatorio automático 2 días antes.</p>
-                    ) : (
-                      <p>Pago inicial pendiente → recordatorio automático antes del vencimiento.</p>
-                    )}
-                    <span className="alert-action">{initialPaid ? 'Flujo activo' : 'Acción sugerida: regularizar pago'}</span>
-                  </div>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <div className="payers-right-column">
-            <article className="payers-card payment-register-card">
-              <div className="payers-card-title">
-                <div>
-                  <h2>6. Registro de pago</h2>
-                  <span className="payers-card-sub">Paso 3 de 5 · registra el intento y su resultado.</span>
-                </div>
-              </div>
-
-              <div className="payment-method-grid">
-                {PAYMENT_METHODS.map((method) => (
-                  <button
-                    type="button"
-                    key={method.id}
-                    className={`payment-method ${selectedMethod === method.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedMethod(method.id)}
-                  >
-                    <MethodIcon name={method.icon} />
-                    <span>{method.label}</span>
-                    {selectedMethod === method.id && <span className="payment-check"><Icon name="check" size={14} /></span>}
-                  </button>
-                ))}
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="amount">Monto a registrar</label>
-                <div className="input-with-prefix">
-                  <span>S/</span>
-                  <input id="amount" type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
-                  <Icon name="money" size={19} />
-                </div>
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="payment-date">Fecha de pago</label>
-                <div className="input-with-icon">
-                  <input id="payment-date" type="text" value="17/09/2026" readOnly />
-                  <Icon name="calendar" size={19} />
-                </div>
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="result">Resultado de la operación</label>
-                <select id="result" value={result} onChange={(event) => setResult(event.target.value)}>
-                  <option value="confirmado">Confirmado</option>
-                  <option value="pendiente">Pendiente de validación</option>
-                  <option value="rechazado">Rechazado</option>
-                </select>
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="reference">Referencia / observación <span>(opcional)</span></label>
-                <input
-                  id="reference"
-                  type="text"
-                  value={reference}
-                  onChange={(event) => setReference(event.target.value)}
-                  placeholder="Ej. N° de operación, nombre del titular, etc."
-                />
-              </div>
-
-              <button className="primary-payment-button" type="button" onClick={registerPayment}>
-                <Icon name="lock" size={17} />
-                Registrar pago
-              </button>
-
-              <p className="secure-note">
-                {source === 'supabase' 
-                  ? 'Registro de pago en base de datos. Validación del método de pago según configuración del negocio.' 
-                  : 'En una implementación real, el medio digital se valida contra el proveedor de pagos. Esta versión académica simula la confirmación.'}
-              </p>
-
-              {notice && <div className="payers-toast" role="status">{notice}</div>}
-            </article>
-
-            <article className="payers-card status-card">
-              <div className="payers-card-title">
-                <h2>7. Estado del cliente y servicio</h2>
-                <span className={`status-large ${initialPaid ? 'confirmed' : 'pending'}`}>{paymentStatus}</span>
-              </div>
-
-              <div className="status-grid">
-                <div><span>Servicio</span><strong>{service?.nombre || 'Sin servicio'}</strong></div>
-                <div><span>Fecha de atención</span><strong>{service?.fechaAtencion || 'Sin fecha'}</strong></div>
-                <div><span>Estado de pago</span><strong>{paymentStatus}</strong></div>
-                <div><span>Estado del servicio</span><strong>{serviceStatus}</strong></div>
-                <div><span>Saldo pendiente</span><strong>{money(balance)}</strong></div>
-              </div>
-
-              {initialPaid && (
-                <div style={{ marginTop: '16px' }}>
-                  <a
-                    href="/staff/customers"
-                    className="primary-payment-button"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      textDecoration: 'none',
-                      background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
-                      color: '#ffffff',
-                      fontWeight: 600,
-                      padding: '12px 18px',
-                      borderRadius: '8px',
-                      border: '1px solid #40916c',
-                      boxShadow: '0 4px 12px rgba(45, 106, 79, 0.35)',
-                    }}
-                  >
-                    <span>➔ Continuar a Fase 4: Atención en Clientes</span>
-                  </a>
-                </div>
-              )}
-            </article>
-
-            <article className="payers-card" id="indicadores">
-              <div className="payers-card-title">
-                <div>
-                  <h2>8. Indicadores de PAYERS</h2>
-                  <span className="payers-card-sub">Vista rápida para BI.</span>
-                </div>
-                <a className="text-button" href="#indicadores">Ver reportes</a>
-              </div>
-
-              <div className="kpi-grid">
-                <div className="kpi-item">
-                  <span className="kpi-icon"><Icon name="trend" size={19} /></span>
-                  <div><small>Tasa de confirmación</small><strong>{confirmedRate}%</strong></div>
-                  <em className="kpi-positive">↑</em>
-                </div>
-                <div className="kpi-item">
-                  <span className="kpi-icon"><Icon name="calendar" size={18} /></span>
-                  <div><small>Cumplimiento de pagos</small><strong>{scheduleCompliance}%</strong></div>
-                  <em className="kpi-neutral">—</em>
-                </div>
-                <div className="kpi-item">
-                  <span className="kpi-icon"><Icon name="clock" size={19} /></span>
-                  <div><small>Pagos pendientes</small><strong>{pendingRate}%</strong></div>
-                  <em className="kpi-neutral">—</em>
-                </div>
-                <div className="kpi-item">
-                  <span className="kpi-icon"><Icon name="alert" size={19} /></span>
-                  <div><small>Pagos vencidos</small><strong>{overdueRate}%</strong></div>
-                  <em className="kpi-positive">↓</em>
-                </div>
-                <div className="kpi-item">
-                  <span className="kpi-icon"><Icon name="card" size={19} /></span>
-                  <div><small>Pagos rechazados</small><strong>{rejectedRate}%</strong></div>
-                  <em className="kpi-positive">↓</em>
-                </div>
-                <div className="kpi-item">
-                  <span className="kpi-icon"><Icon name="money" size={19} /></span>
-                  <div><small>Ticket registrado</small><strong>{history.length ? money(confirmedTotal) : 'S/ 0.00'}</strong></div>
-                  <em className="kpi-neutral">•</em>
-                </div>
-              </div>
-
-              <div className="kpi-legend">
-                <span>{source === 'supabase' 
-                  ? 'Indicadores calculados con datos reales de la base de datos.' 
-                  : 'Los valores se recalculan con la interacción de la demo.'}</span>
-                <span>Menos pagos vencidos/rechazados = menor incidencia.</span>
-              </div>
-            </article>
-          </div>
+            </div>
+          </article>
         </section>
       </main>
 

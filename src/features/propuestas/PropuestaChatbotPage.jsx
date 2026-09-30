@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../../shared/components/Navbar'
 import Footer from '../../shared/components/Footer'
 import { validarTokenPropuesta } from '../../lib/mistralService'
-import { obtenerPropuestaPorToken, enviarMensajeChatbot, confirmarPropuestaFinal } from './api/propuestasApi'
+import { obtenerPropuestaPorToken, enviarMensajeChatbot, confirmarPropuestaFinal, rechazarPropuestaChatbot } from './api/propuestasApi'
 import { logger } from '../../lib/logger'
 
 export default function PropuestaChatbotPage() {
@@ -24,6 +24,8 @@ export default function PropuestaChatbotPage() {
   const [sending, setSending] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [confirmError, setConfirmError] = useState(null)
+  const [rechazado, setRechazado] = useState(false)
+  const [rejecting, setRejecting] = useState(false)
   
   const messagesEndRef = useRef(null)
 
@@ -168,6 +170,27 @@ export default function PropuestaChatbotPage() {
     }
   }
 
+  async function handleRechazarPropuesta() {
+    if (!propuesta?.id_propuesta) return
+    if (!window.confirm('¿Estás seguro de que deseas declinar esta propuesta? Podremos preparar otra alternativa para ti más adelante.')) {
+      return
+    }
+    setRejecting(true)
+    try {
+      await rechazarPropuestaChatbot(
+        propuesta.id_propuesta, 
+        propuesta.id_contacto, 
+        'Declinada voluntariamente por el cliente desde la vista de propuesta'
+      )
+      setRechazado(true)
+    } catch (error) {
+      logger.error('propuestaChatbot', 'Error rechazando propuesta', { error })
+      setConfirmError('No se pudo procesar la cancelación. Por favor intenta de nuevo.')
+    } finally {
+      setRejecting(false)
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -212,6 +235,45 @@ export default function PropuestaChatbotPage() {
                 className="btn-primary"
               >
                 Ir al inicio
+              </button>
+            </div>
+          </div>
+        </section>
+        <Footer />
+      </>
+    )
+  }
+
+  if (rechazado) {
+    return (
+      <>
+        <Navbar />
+        <section className="section">
+          <div className="container section-line" style={{ paddingTop: '3.5rem' }}>
+            <div style={{ 
+              maxWidth: '600px', 
+              margin: '0 auto',
+              textAlign: 'center',
+              padding: '3rem',
+              background: 'var(--color-bg-alt)',
+              borderRadius: '8px',
+              border: '1px solid var(--color-line)'
+            }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🍃</div>
+              <h2 style={{ 
+                fontFamily: 'var(--font-display)',
+                color: 'var(--color-clay)', 
+                marginBottom: '1rem' 
+              }}>Propuesta Declinada</h2>
+              <p style={{ color: 'var(--color-ink-muted)', marginBottom: '2rem' }}>
+                Comprendemos que esta opción no sea lo que buscas en este momento. Hemos tomado nota en tu expediente para adaptar futuras experiencias a tus tiempos y preferencias.
+              </p>
+              <button 
+                onClick={() => navigate('/')}
+                className="btn-primary"
+                style={{ background: 'var(--color-accent)' }}
+              >
+                Volver a la página principal
               </button>
             </div>
           </div>
@@ -592,7 +654,7 @@ export default function PropuestaChatbotPage() {
                 {/* Botón de confirmación - siempre visible */}
                 <button
                   onClick={handleConfirmarPropuesta}
-                  disabled={confirming}
+                  disabled={confirming || rejecting}
                   style={{
                     marginTop: '1rem',
                     width: '100%',
@@ -601,12 +663,32 @@ export default function PropuestaChatbotPage() {
                     color: '#1B2A21',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: confirming ? 'not-allowed' : 'pointer',
+                    cursor: confirming || rejecting ? 'not-allowed' : 'pointer',
                     fontSize: '1rem',
                     fontWeight: '600'
                   }}
                 >
                   {confirming ? 'Confirmando...' : '✅ Confirmar Propuesta'}
+                </button>
+
+                {/* Botón para declinar la propuesta */}
+                <button
+                  type="button"
+                  onClick={handleRechazarPropuesta}
+                  disabled={confirming || rejecting}
+                  style={{
+                    marginTop: '0.6rem',
+                    width: '100%',
+                    padding: '0.6rem',
+                    background: 'transparent',
+                    color: 'var(--color-ink-muted)',
+                    border: '1px solid rgba(217, 175, 160, 0.3)',
+                    borderRadius: '4px',
+                    cursor: confirming || rejecting ? 'not-allowed' : 'pointer',
+                    fontSize: '0.8rem'
+                  }}
+                >
+                  {rejecting ? 'Declinando...' : 'No me interesa esta propuesta por ahora'}
                 </button>
               </div>
             </div>

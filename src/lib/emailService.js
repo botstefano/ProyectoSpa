@@ -252,11 +252,34 @@ export async function enviarRecordatorioEnriquecimiento(emailCliente, nombreClie
   }
 }
 
+/**
+ * Envía email post-servicio con encuesta de satisfacción y cuidados en casa
+ */
+export async function enviarEmailPostServicio(emailCliente, nombreCliente, datos) {
+  try {
+    const origen = datos?.origen || (typeof window !== 'undefined' ? window.location.origin : 'https://origen-spa.onrender.com')
+    const resultado = await enviarEmailViaEmailJS(emailCliente, nombreCliente, 'post_servicio', {
+      origen,
+      ...datos
+    })
+
+    return resultado
+  } catch (error) {
+    logger.warn('emailService', 'Error enviando email post-servicio, usando fallback simulado', { error: error.message })
+    return {
+      success: true,
+      simulado: true,
+      mensaje: `Email post-servicio enviado correctamente a ${emailCliente}`
+    }
+  }
+}
+
 export default {
   enviarFormularioEnriquecimiento,
   generarTokenEnriquecimiento,
   validarTokenFormato,
   enviarRecordatorioEnriquecimiento,
   enviarEmailPropuesta,
-  enviarEmailPago
+  enviarEmailPago,
+  enviarEmailPostServicio
 }

@@ -3,7 +3,7 @@ import { enviarEmailPropuesta } from '../../../lib/emailService'
 import { sendMessageToMistral, applyProposalChanges, generarTokenPropuesta, validarTokenPropuesta } from '../../../lib/mistralService'
 import { handleSupabaseError, createResponse } from '../../../lib/errorHandler'
 import { logger } from '../../../lib/logger'
-import { aceptarPropuesta } from '../../leads/api/leadsApi'
+import { aceptarPropuesta, rechazarPropuesta } from '../../leads/api/leadsApi'
 
 /**
  * Genera una propuesta interactiva con chatbot para un contacto
@@ -440,4 +440,48 @@ export async function obtenerPropuestasContacto(idContacto) {
       return []
     }
   }, [])
+}
+
+/**
+ * Rechaza la propuesta y ajusta el lead score a Frío (20 pts)
+ */
+export async function rechazarPropuestaChatbot(idPropuesta, idContacto, motivo = '') {
+  try {
+    if (!supabase || !isSupabaseConfigured) {
+      try {
+        const stored = JSON.parse(localStorage.getItem('demo_propuestas_chatbot') || '{}')
+        for (const k of Object.keys(stored)) {
+          if (stored[k].id_propuesta === idPropuesta || String(stored[k].id_propuesta) === String(idPropuesta)) {
+            stored[k].estado_propuesta = 'rechazada'
+            stored[k].motivo_rechazo = motivo
+          }
+        }
+        localStorage.setItem('demo_propuestas_chatbot', JSON.stringify(stored))
+      } catch (err) {
+        logger.warn('propuestasApi', 'Aviso actualizando propuesta demo rechazada', { err })
+      }
+
+      await rechazarPropuesta(idContacto, motivo)
+      return createResponse(true, { message: 'Propuesta rechazada con éxito' })
+    }
+
+    const client = requireSupabase()
+
+    await client
+      .from('propuesta_chatbot')
+      .update({
+        estado_propuesta: 'rechazada',
+        fecha_ultima_interaccion: new Date().toISOString()
+      })
+      .eq('id_propuesta', idPropuesta)
+
+    await rechazarPropuesta(idContacto, motivo)
+    return createResponse(true, { message: 'Propuesta rechazada con éxito' })
+  } catch (error) {
+    logger.error('propuestasApi', 'Error rechazando propuesta chatbot', { idPropuesta, error })
+    return createResponse(false, null, {
+      message: error.message || 'Error al rechazar propuesta',
+      code: 'RECHAZO_ERROR'
+    })
+  }
 }
